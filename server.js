@@ -11,9 +11,9 @@ const PORT = process.env.PORT;
 
 console.log("port =>", PORT)
 
-// mongoose.connect(process.env.MONGO_URL).then(() => {
-//   console.log("Connected to MongoDB");
-// });
+mongoose.connect(process.env.MONGO_URL).then(() => {
+  console.log("Connected to MongoDB");
+});
 
 
 const logger = (req, res, next) => {
@@ -21,7 +21,7 @@ const logger = (req, res, next) => {
   next();
 };
 
-let whitelist = ['https://yuvadarpan.netlify.app', 'http://localhost']
+let whitelist = ['https://yuvadarpan.netlify.app', 'http://localhost:3000']
 
 let corsOptions = {
   origin: function (origin, callback) {

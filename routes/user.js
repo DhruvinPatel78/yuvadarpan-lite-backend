@@ -1,23 +1,22 @@
 const express = require('express');
 const router = express.Router();
+const User = require('../models/user');
 
-const user = [
-    {
-        firstName: 'Dhruvin',
-        MiddleName:'Maheshbhai',
-        lastName: 'Patel',
-        email: 'patel.dhruvinpatel@gmail.com',
-        password: 'Dhruvin@123',
-        mobile: '7874611716',
-        familyId: 425050,
-        uId: 'fjhsdfjksdf',
-        active: true,
-        allowed: true
-    },
-];
+router.get('/list', async(req, res) => {
+    const users = await User.find();
+    res.json(users)
+})
 
-router.get('/list', (req, res) => {
-    res.json(user)
+router.post('/signUp', async(req, res) => {
+    const user = req.body;
+    const dbUser = await User.create(user);
+    res.send(dbUser);
+})
+
+router.post('/signIn', async(req, res) => {
+    const user = req.body;
+    const dbUser = await User.create(user);
+    res.send(dbUser);
 })
 
 module.exports = router;

@@ -5,7 +5,7 @@ const userSchema = new mongoose.Schema({
     type: String,
     required: true,
   },
-  MiddleName: {
+  middleName: {
     type: String,
     required: true,
   },
@@ -27,10 +27,6 @@ const userSchema = new mongoose.Schema({
   },
   familyId: {
     type: Number,
-    required: true,
-  },
-  uId: {
-    type: String,
     required: true,
   },
   active: Boolean,
