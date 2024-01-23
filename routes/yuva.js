@@ -6,10 +6,21 @@ const Yuva = require("../models/yuva");
 const verifyToken = (req, res, next) => {
   const authHeader = req.headers.authorization;
   if (authHeader) {
-    const parsedJWT = jwt.verify(authHeader, process.env.JWT_SECRET);
-    req.user = {
-      email: parsedJWT.email,
-      role: parsedJWT.role,
+    jwt.verify(authHeader, process.env.JWT_SECRET, (error, res) => {
+      if (res) {
+        req.user = {
+          email: res.email,
+          role: res.role,
+        };
+      } else {
+        req.error = {
+          message: error.name,
+        };
+      }
+    });
+  } else {
+    req.error = {
+      message: "no-token",
     };
   }
   next();
@@ -17,9 +28,23 @@ const verifyToken = (req, res, next) => {
 
 router.use(verifyToken);
 
+const errorCheck = (req, res) => {
+  if (req.hasOwnProperty("error")) {
+    const { message } = req.error;
+    res.status(401).send({
+      message: message === "no-token" ? "Unauthenticated" : "Token Expired",
+    });
+    return true;
+  } else {
+    return false;
+  }
+};
+
 router.get("/list", async (req, res) => {
-  const dbYuva = await Yuva.find();
-  res.json(dbYuva);
+  if (!errorCheck(req, res)) {
+    const dbYuva = await Yuva.find();
+    res.json(dbYuva);
+  }
 });
 
 router.post("/:id", async (req, res) => {

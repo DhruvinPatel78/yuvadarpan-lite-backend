@@ -4,6 +4,18 @@ const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 const User = require("../models/user");
 
+const verifyToken = (req, res, next) => {
+  const authHeader = req.headers.authorization;
+  if (authHeader) {
+    const parsedJWT = jwt.verify(authHeader, process.env.JWT_SECRET);
+    req.user = {
+      email: parsedJWT.email,
+      role: parsedJWT.role,
+    };
+  }
+  next();
+};
+router.use(verifyToken);
 router.get("/list", async (req, res) => {
   const users = await User.find();
   res.json(users);
@@ -25,7 +37,9 @@ router.post("/signIn", async (req, res) => {
       if (dbUser?.allowed) {
         const token = jwt.sign(
           { email: dbUser.email, role: dbUser.role },
-          process.env.JWT_SECRET,
+          process.env.JWT_SECRET,{
+              expiresIn: '24h',
+            }
         );
         res.send({ data: dbUser, token });
       } else {
