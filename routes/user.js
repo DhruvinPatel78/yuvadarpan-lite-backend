@@ -7,18 +7,51 @@ const User = require("../models/user");
 const verifyToken = (req, res, next) => {
   const authHeader = req.headers.authorization;
   if (authHeader) {
-    const parsedJWT = jwt.verify(authHeader, process.env.JWT_SECRET);
-    req.user = {
-      email: parsedJWT.email,
-      role: parsedJWT.role,
+    jwt.verify(authHeader, process.env.JWT_SECRET, (error, res) => {
+      if (res) {
+        req.user = {
+          email: res.email,
+          role: res.role,
+        };
+      } else {
+        req.error = {
+          message: error.name,
+        };
+      }
+    });
+  } else {
+    req.error = {
+      message: "no-token",
     };
   }
   next();
 };
+
+const errorCheck = (req, res) => {
+  if (req.hasOwnProperty("error")) {
+    const { message } = req.error;
+    res.status(401).send({
+      message: message === "no-token" ? "Unauthenticated" : "Token Expired",
+    });
+    return true;
+  } else {
+    return false;
+  }
+};
+
 router.use(verifyToken);
 router.get("/list", async (req, res) => {
-  const users = await User.find();
-  res.json(users);
+  if (!errorCheck(req, res)) {
+    const users = await User.find({ role: { $ne: "ADMIN" } });
+    res.json(users);
+  }
+});
+
+router.get("/requests", async (req, res) => {
+  if (!errorCheck(req, res)) {
+    const users = await User.find({ allowed: false });
+    res.json(users);
+  }
 });
 
 router.post("/signUp", async (req, res) => {
@@ -37,9 +70,10 @@ router.post("/signIn", async (req, res) => {
       if (dbUser?.allowed) {
         const token = jwt.sign(
           { email: dbUser.email, role: dbUser.role },
-          process.env.JWT_SECRET,{
-              expiresIn: '24h',
-            }
+          process.env.JWT_SECRET,
+          {
+            expiresIn: "24h",
+          },
         );
         res.send({ data: dbUser, token });
       } else {
@@ -50,6 +84,14 @@ router.post("/signIn", async (req, res) => {
     }
   } else {
     res.status(401).send({ message: "Password or email incorrect" });
+  }
+});
+
+router.patch("/update/:id", async (req, res) => {
+  if (!errorCheck(req, res)) {
+    await User.updateOne({ _id: req.body.id }, { ...req.body });
+    const users = await User.find({ allowed: false });
+    res.json(users);
   }
 });
 
