@@ -49,7 +49,7 @@ router.get("/list", async (req, res) => {
 
 router.get("/requests", async (req, res) => {
   if (!errorCheck(req, res)) {
-    const users = await User.find({ allowed: false });
+    const users = await User.find({ allowed: false, role: { $ne: "ADMIN" } });
     res.json(users);
   }
 });
@@ -90,7 +90,19 @@ router.post("/signIn", async (req, res) => {
 router.patch("/update/:id", async (req, res) => {
   if (!errorCheck(req, res)) {
     await User.updateOne({ _id: req.body.id }, { ...req.body });
-    const users = await User.find({ allowed: false });
+    const users = await User.find({ role: { $ne: "ADMIN" } });
+    res.json(users);
+  }
+});
+
+router.patch("/approveRejectMany", async (req, res) => {
+  if (!errorCheck(req, res)) {
+    const d = User.find({ _id: { $ne: req.body.ids } });
+    await User.updateMany(
+      { _id: { $in: req.body.ids } },
+      { $set: { allowed: req.body.action === "accept" } },
+    );
+    const users = await User.find({ allowed: false, role: { $ne: "ADMIN" } });
     res.json(users);
   }
 });
