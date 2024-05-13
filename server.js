@@ -33,7 +33,8 @@ let corsOptions = {
   },
 };
 
-app.use(cors(corsOptions));
+// app.use(cors(corsOptions));
+app.use(cors());
 
 app.use(logger);
 app.use(express.json());
