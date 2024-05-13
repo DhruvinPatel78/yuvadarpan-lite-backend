@@ -5,6 +5,7 @@ const mongoose = require("mongoose");
 const cors = require("cors");
 const yuvaRouter = require("./routes/yuva");
 const userRouter = require("./routes/user");
+const yuvaListRoutes = require("./routes/yuvaList");
 const app = express();
 
 const PORT = process.env.PORT;
@@ -15,23 +16,22 @@ mongoose.connect(process.env.MONGO_URL).then(() => {
   console.log("Connected to MongoDB");
 });
 
-
 const logger = (req, res, next) => {
   console.log(`${req.method}: Request received on ${req.url}`);
   next();
 };
 
-let whitelist = ['https://yuvadarpan.netlify.app', 'http://localhost:3000']
+let whitelist = ["https://yuvadarpan.netlify.app", "http://localhost:3000"];
 
 let corsOptions = {
   origin: function (origin, callback) {
     if (whitelist.indexOf(origin) !== -1) {
-      callback(null, true)
+      callback(null, true);
     } else {
-      callback(new Error('Not allowed by CORS'))
+      callback(new Error("Not allowed by CORS"));
     }
-  }
-}
+  },
+};
 
 app.use(cors(corsOptions));
 
@@ -39,6 +39,7 @@ app.use(logger);
 app.use(express.json());
 app.use("/yuva/", yuvaRouter);
 app.use("/user/", userRouter);
+app.use("/yuvaList", yuvaListRoutes);
 
 app.listen(PORT, () => {
   console.log(`Server is up and running on ${PORT}`);
