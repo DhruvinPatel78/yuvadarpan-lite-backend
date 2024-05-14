@@ -5,7 +5,7 @@ const mongoose = require("mongoose");
 const cors = require("cors");
 const yuvaRouter = require("./routes/yuva");
 const userRouter = require("./routes/user");
-const yuvaListRoutes = require("./routes/yuvaList");
+const yuvaListRoutes = require("./routes/yuvalist");
 const app = express();
 
 const PORT = process.env.PORT;
@@ -40,7 +40,7 @@ app.use(logger);
 app.use(express.json());
 app.use("/yuva/", yuvaRouter);
 app.use("/user/", userRouter);
-app.use("/yuvaList", yuvaListRoutes);
+app.use("/yuvalist", yuvaListRoutes);
 
 app.listen(PORT, () => {
   console.log(`Server is up and running on ${PORT}`);

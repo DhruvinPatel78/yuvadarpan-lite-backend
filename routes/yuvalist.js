@@ -1,7 +1,7 @@
 const express = require("express");
 const jwt = require("jsonwebtoken");
 const router = express.Router();
-const YuvaList = require("../models/yuvaList");
+const Yuvalist = require("../models/yuvalist");
 
 const verifyToken = (req, res, next) => {
   const authHeader = req.headers.authorization;
@@ -42,14 +42,21 @@ const errorCheck = (req, res) => {
 
 router.get("/list", async (req, res) => {
   if (!errorCheck(req, res)) {
-    const dbYuva = await YuvaList.find();
+    const dbYuva = await Yuvalist.find();
     res.json(dbYuva);
   }
 });
 router.get("/list/:id", async (req, res) => {
   if (!errorCheck(req, res)) {
-    const dbYuva = await YuvaList.findById(req.params.id);
+    const dbYuva = await Yuvalist.findById(req.params.id);
     res.json(dbYuva);
+  }
+});
+
+router.get("/citylist", async (req, res) => {
+  if (!errorCheck(req, res)) {
+    const data = require('../data/pages.json')
+    res.json(data.data);
   }
 });
 
@@ -57,7 +64,7 @@ router.post("/addYuvaList", async (req, res) => {
   const yuvaList = req.body;
   const user = req.user;
   if (user.role === "ADMIN") {
-    const dbYuvaList = await YuvaList.create(yuvaList);
+    const dbYuvaList = await Yuvalist.create(yuvaList);
     res.send(dbYuvaList);
   } else {
     res.status(403).send({ message: "Only admin can create New yuva" });
@@ -65,15 +72,15 @@ router.post("/addYuvaList", async (req, res) => {
 });
 router.delete("/:id", async (req, res) => {
   if (!errorCheck(req, res)) {
-    await YuvaList.findByIdAndDelete(req.params.id);
-    const updatedData = await YuvaList.find();
+    await Yuvalist.findByIdAndDelete(req.params.id);
+    const updatedData = await Yuvalist.find();
     res.status(200).json(updatedData);
   }
 });
 router.patch("/update/:id", async (req, res) => {
   if (!errorCheck(req, res)) {
-    await YuvaList.updateOne({ _id: req.body.id }, { ...req.body });
-    const users = await YuvaList.find();
+    await Yuvalist.updateOne({ _id: req.body.id }, { ...req.body });
+    const users = await Yuvalist.find();
     res.json(users);
   }
 });

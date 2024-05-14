@@ -101,6 +101,6 @@ const yuvaListSchema = new mongoose.Schema({
   active: Boolean,
 });
 
-const YuvaList = mongoose.model("YuvaList", yuvaListSchema);
+const Yuvalist = mongoose.model("YuvaList", yuvaListSchema);
 
-module.exports = YuvaList;
+module.exports = Yuvalist;
