@@ -54,10 +54,10 @@ router.get("/list/:id", async (req, res) => {
 });
 
 router.get("/citylist", async (req, res) => {
-  // if (!errorCheck(req, res)) {
+  if (!errorCheck(req, res)) {
     const data = require('../data/pages.json')
     res.json(data.data);
-  // }
+  }
 });
 
 router.post("/addYuvaList", async (req, res) => {
