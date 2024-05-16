@@ -29,6 +29,10 @@ const userSchema = new mongoose.Schema({
     type: Number,
     required: true,
   },
+  dob:{
+    type: String,
+    required: true,
+  },
   active: Boolean,
   allowed: Boolean,
   role: String,

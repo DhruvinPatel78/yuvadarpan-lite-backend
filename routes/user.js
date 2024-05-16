@@ -63,7 +63,7 @@ router.post("/signUp", async (req, res) => {
 
 router.post("/signIn", async (req, res) => {
   const { email, password } = req.body;
-  const dbUser = await User.findOne({ email });
+  const dbUser = await User.findOne({ email }).lean();
   console.log("DBUSER =>", dbUser)
   if (dbUser !== null && dbUser !== undefined) {
     const passwordMatched = await bcrypt.compare(password, dbUser.password);
@@ -73,9 +73,10 @@ router.post("/signIn", async (req, res) => {
           { email: dbUser.email, role: dbUser.role },
           process.env.JWT_SECRET,
           {
-            expiresIn: "24h",
+            expiresIn: "30d",
           },
         );
+        delete dbUser.password;
         res.send({ data: dbUser, token });
       } else {
         res.status(403).send({ message: "Your account is not verified." });
