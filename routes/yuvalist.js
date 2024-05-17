@@ -32,7 +32,7 @@ const errorCheck = (req, res) => {
   if (req.hasOwnProperty("error")) {
     const { message } = req.error;
     res.status(401).send({
-      message: message === "no-token" ? "Unauthenticated" : "Token Expired",
+      message: message === "no-token" ? "unauthenticated" : "token-expired",
     });
     return true;
   } else {
@@ -55,7 +55,7 @@ router.get("/list/:id", async (req, res) => {
 
 router.get("/citylist", async (req, res) => {
   if (!errorCheck(req, res)) {
-    const data = require('../data/pages.json')
+    const data = require("../data/pages.json");
     res.json(data.data);
   }
 });
@@ -67,7 +67,7 @@ router.post("/addYuvaList", async (req, res) => {
     const dbYuvaList = await Yuvalist.create(yuvaList);
     res.send(dbYuvaList);
   } else {
-    res.status(403).send({ message: "Only admin can create New yuva" });
+    res.status(403).send({ message: "only-admin-can-create-new-yuva" });
   }
 });
 router.delete("/:id", async (req, res) => {

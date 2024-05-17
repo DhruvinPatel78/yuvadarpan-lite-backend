@@ -31,7 +31,7 @@ const errorCheck = (req, res) => {
   if (req.hasOwnProperty("error")) {
     const { message } = req.error;
     res.status(401).send({
-      message: message === "no-token" ? "Unauthenticated" : "Token Expired",
+      message: message === "no-token" ? "unauthenticated" : "token-expired",
     });
     return true;
   } else {
@@ -49,7 +49,11 @@ router.get("/list", async (req, res) => {
 
 router.get("/requests", async (req, res) => {
   if (!errorCheck(req, res)) {
-    const users = await User.find({ allowed: false, active: true,  role: { $ne: "ADMIN" } });
+    const users = await User.find({
+      allowed: false,
+      active: true,
+      role: { $ne: "ADMIN" },
+    });
     res.json(users);
   }
 });
@@ -64,7 +68,7 @@ router.post("/signUp", async (req, res) => {
 router.post("/signIn", async (req, res) => {
   const { email, password } = req.body;
   const dbUser = await User.findOne({ email }).lean();
-  console.log("DBUSER =>", dbUser)
+  console.log("DBUSER =>", dbUser);
   if (dbUser !== null && dbUser !== undefined) {
     const passwordMatched = await bcrypt.compare(password, dbUser.password);
     if (passwordMatched) {
@@ -74,18 +78,18 @@ router.post("/signIn", async (req, res) => {
           process.env.JWT_SECRET,
           {
             expiresIn: "30d",
-          },
+          }
         );
         delete dbUser.password;
         res.send({ data: dbUser, token });
       } else {
-        res.status(403).send({ message: "Your account is not verified." });
+        res.status(403).send({ message: "your-account-is-not-verified." });
       }
     } else {
-      res.status(401).send({ message: "Password or email incorrect" });
+      res.status(401).send({ message: "password-or-email-incorrect" });
     }
   } else {
-    res.status(401).send({ message: "Password or email incorrect" });
+    res.status(401).send({ message: "password-or-email-incorrect" });
   }
 });
 
@@ -102,9 +106,18 @@ router.patch("/approveRejectMany", async (req, res) => {
     const d = User.find({ _id: { $ne: req.body.ids } });
     await User.updateMany(
       { _id: { $in: req.body.ids } },
-      { $set: { allowed: req.body.action === "accept", active: req.body.action === "accept" } },
+      {
+        $set: {
+          allowed: req.body.action === "accept",
+          active: req.body.action === "accept",
+        },
+      }
     );
-    const users = await User.find({ allowed: false, active: true, role: { $ne: "ADMIN" } });
+    const users = await User.find({
+      allowed: false,
+      active: true,
+      role: { $ne: "ADMIN" },
+    });
     res.json(users);
   }
 });
