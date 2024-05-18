@@ -3,6 +3,8 @@ const router = express.Router();
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 const User = require("../models/user");
+const OtpGenerator = require("otp-generator");
+const OTP = require("../models/OTP");
 
 const verifyToken = (req, res, next) => {
   const authHeader = req.headers.authorization;
@@ -65,6 +67,38 @@ router.post("/signUp", async (req, res) => {
   res.send(dbUser);
 });
 
+router.post("/sendOtp", async (req, res) => {
+  if (!errorCheck(req, res)) {
+    const {email} = req.body;
+    const isUserExist = await User.findOne({email})
+    // console.log("isUserExist", isUserExist)
+    if (isUserExist) {
+      let otp = OtpGenerator.generate(6, {
+        upperCaseAlphabets: false,
+        lowerCaseAlphabets: false,
+        specialChars: false,
+      });
+      const result = await OTP.findOne({ otp: otp });
+      console.log("Result is Generate OTP Func");
+      console.log("OTP", otp);
+      console.log("Result", result);
+      while (result) {
+        otp = OtpGenerator.generate(6, {
+          upperCaseAlphabets: false,
+        });
+      }
+      const otpPayload = { email, otp };
+      const otpBody = await OTP.create(otpPayload);
+      console.log("OTP Body", otpBody);
+      res.status(200).json({
+        success: true,
+        message: `OTP Sent Successfully`,
+        otp,
+      });
+    }
+  }
+})
+
 router.post("/signIn", async (req, res) => {
   const { email, password } = req.body;
   const dbUser = await User.findOne({ email }).lean();
@@ -83,7 +117,7 @@ router.post("/signIn", async (req, res) => {
         delete dbUser.password;
         res.send({ data: dbUser, token });
       } else {
-        res.status(403).send({ message: "your-account-is-not-verified." });
+        res.status(403).send({ message: "your-account-is-not-verified" });
       }
     } else {
       res.status(401).send({ message: "password-or-email-incorrect" });

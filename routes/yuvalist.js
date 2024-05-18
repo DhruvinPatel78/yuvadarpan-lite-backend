@@ -67,7 +67,7 @@ router.post("/addYuvaList", async (req, res) => {
     const dbYuvaList = await Yuvalist.create(yuvaList);
     res.send(dbYuvaList);
   } else {
-    res.status(403).send({ message: "only-admin-can-create-new-yuva" });
+    res.status(403).send({ message: "only-admin-can-create-yuva" });
   }
 });
 router.delete("/:id", async (req, res) => {
