@@ -19,15 +19,18 @@ const OTPSchema = new mongoose.Schema({
 
 // Define a function to send emails
 async function sendVerificationEmail(email, otp) {
-  console.log("OTP - - - ->SEND",email)
+  console.log("OTP - - - ->SEND", email);
   // Send the email using our custom mailSender Function
   try {
     const mailResponse = await mailSender(
-      email,
+      "yash362001@gmail.com",
+      // email,
       "Verification Email",
-      `<h1>Please confirm your OTP </h1>
-             <p> here is your OTP code:-> ${otp} </p>
-            `
+      `<div style="background: #999999;height: 100%">
+                <h1>Please confirm your OTP </h1>
+             <p>OTP code:- ${otp} </p>
+             </div>
+            `,
     );
     console.log("Email sent successfully: ", mailResponse);
   } catch (error) {

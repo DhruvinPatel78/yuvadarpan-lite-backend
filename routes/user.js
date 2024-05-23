@@ -69,9 +69,8 @@ router.post("/signUp", async (req, res) => {
 
 router.post("/sendOtp", async (req, res) => {
   if (!errorCheck(req, res)) {
-    const {email} = req.body;
-    const isUserExist = await User.findOne({email})
-    // console.log("isUserExist", isUserExist)
+    const { email } = req.body;
+    const isUserExist = await User.findOne({ email });
     if (isUserExist) {
       let otp = OtpGenerator.generate(6, {
         upperCaseAlphabets: false,
@@ -79,9 +78,6 @@ router.post("/sendOtp", async (req, res) => {
         specialChars: false,
       });
       const result = await OTP.findOne({ otp: otp });
-      console.log("Result is Generate OTP Func");
-      console.log("OTP", otp);
-      console.log("Result", result);
       while (result) {
         otp = OtpGenerator.generate(6, {
           upperCaseAlphabets: false,
@@ -89,15 +85,34 @@ router.post("/sendOtp", async (req, res) => {
       }
       const otpPayload = { email, otp };
       const otpBody = await OTP.create(otpPayload);
-      console.log("OTP Body", otpBody);
       res.status(200).json({
         success: true,
         message: `OTP Sent Successfully`,
         otp,
       });
+    } else {
+      res.status(404).send({ message: "user-not-found" });
     }
   }
-})
+});
+router.post("/verifyOtp", async (req, res) => {
+  if (!errorCheck(req, res)) {
+    const { email, otp } = req.body;
+    const isUserExist = await User.findOne({ email });
+    if (isUserExist) {
+      const isOtpExist = await OTP.findOne({ otp: otp });
+      console.log("isOtpExist", isOtpExist);
+      if (isOtpExist) {
+        await OTP.findByIdAndDelete(isOtpExist?.id);
+        res.status(200).send({message:"otp-verify-successfully"})
+      }else {
+        res.status(404).send({ message: "invalid-otp" });
+      }
+    } else {
+      res.status(404).send({ message: "user-not-found" });
+    }
+  }
+});
 
 router.post("/signIn", async (req, res) => {
   const { email, password } = req.body;
@@ -112,7 +127,7 @@ router.post("/signIn", async (req, res) => {
           process.env.JWT_SECRET,
           {
             expiresIn: "30d",
-          }
+          },
         );
         delete dbUser.password;
         res.send({ data: dbUser, token });
@@ -145,7 +160,7 @@ router.patch("/approveRejectMany", async (req, res) => {
           allowed: req.body.action === "accept",
           active: req.body.action === "accept",
         },
-      }
+      },
     );
     const users = await User.find({
       allowed: false,
