@@ -87,11 +87,11 @@ router.post("/sendOtp", async (req, res) => {
       const otpBody = await OTP.create(otpPayload);
       res.status(200).json({
         success: true,
-        message: `OTP Sent Successfully`,
+        message: `otp-sent-successfully`,
         otp,
       });
     } else {
-      res.status(404).send({ message: "user-not-found" });
+      res.status(404).send({ message: "email-invalid" });
     }
   }
 });
@@ -101,15 +101,14 @@ router.post("/verifyOtp", async (req, res) => {
     const isUserExist = await User.findOne({ email });
     if (isUserExist) {
       const isOtpExist = await OTP.findOne({ otp: otp });
-      console.log("isOtpExist", isOtpExist);
       if (isOtpExist) {
         await OTP.findByIdAndDelete(isOtpExist?.id);
-        res.status(200).send({message:"otp-verify-successfully"})
-      }else {
+        res.status(200).send({ message: "otp-verify-successfully" });
+      } else {
         res.status(404).send({ message: "invalid-otp" });
       }
     } else {
-      res.status(404).send({ message: "user-not-found" });
+      res.status(404).send({ message: "email-invalid" });
     }
   }
 });
@@ -117,7 +116,6 @@ router.post("/verifyOtp", async (req, res) => {
 router.post("/signIn", async (req, res) => {
   const { email, password } = req.body;
   const dbUser = await User.findOne({ email }).lean();
-  console.log("DBUSER =>", dbUser);
   if (dbUser !== null && dbUser !== undefined) {
     const passwordMatched = await bcrypt.compare(password, dbUser.password);
     if (passwordMatched) {
@@ -127,7 +125,7 @@ router.post("/signIn", async (req, res) => {
           process.env.JWT_SECRET,
           {
             expiresIn: "30d",
-          },
+          }
         );
         delete dbUser.password;
         res.send({ data: dbUser, token });
@@ -149,6 +147,22 @@ router.patch("/update/:id", async (req, res) => {
     res.json(users);
   }
 });
+router.patch("/forgotPassword", async (req, res) => {
+  if (!errorCheck(req, res)) {
+    const { email, password } = req.body;
+    const isUserExits = await User.findOne({ email });
+    if (isUserExits) {
+      const newPassword = await bcrypt.hash(password, 10);
+      await User.updateOne(
+        { _id: isUserExits?.id },
+        { $set: { password: newPassword } }
+      );
+      res.status(200).send({ message: "password-update-successfully" });
+    } else {
+      res.status(404).send({ message: "email-invalid" });
+    }
+  }
+});
 
 router.patch("/approveRejectMany", async (req, res) => {
   if (!errorCheck(req, res)) {
@@ -160,7 +174,7 @@ router.patch("/approveRejectMany", async (req, res) => {
           allowed: req.body.action === "accept",
           active: req.body.action === "accept",
         },
-      },
+      }
     );
     const users = await User.find({
       allowed: false,
