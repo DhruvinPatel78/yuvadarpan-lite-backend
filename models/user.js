@@ -36,6 +36,10 @@ const userSchema = new mongoose.Schema({
   active: Boolean,
   allowed: Boolean,
   role: String,
+  createdAt:Date,
+  updatedAt:Date,
+  createdBy:String,
+  updatedBy:String,
 });
 
 const User = mongoose.model("User", userSchema);

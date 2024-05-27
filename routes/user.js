@@ -63,7 +63,13 @@ router.get("/requests", async (req, res) => {
 router.post("/signUp", async (req, res) => {
   const user = req.body;
   user.password = await bcrypt.hash(user.password, 10);
-  const dbUser = await User.create(user);
+  const dbUser = await User.create({
+    ...user,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    createdBy: null,
+    updatedBy: null,
+  });
   res.send(dbUser);
 });
 
@@ -86,7 +92,6 @@ router.post("/sendOtp", async (req, res) => {
       const otpPayload = { email, otp };
       const otpBody = await OTP.create(otpPayload);
       res.status(200).json({
-        success: true,
         message: `otp-sent-successfully`,
         otp,
       });
@@ -142,7 +147,10 @@ router.post("/signIn", async (req, res) => {
 
 router.patch("/update/:id", async (req, res) => {
   if (!errorCheck(req, res)) {
-    await User.updateOne({ _id: req.body.id }, { ...req.body });
+    await User.updateOne(
+      { _id: req.body.id },
+      { ...req.body, updatedAt: new Date(), updatedBy: req.body.id }
+    );
     const users = await User.find({ role: { $ne: "ADMIN" } });
     res.json(users);
   }
@@ -155,7 +163,13 @@ router.patch("/forgotPassword", async (req, res) => {
       const newPassword = await bcrypt.hash(password, 10);
       await User.updateOne(
         { _id: isUserExits?.id },
-        { $set: { password: newPassword } }
+        {
+          $set: {
+            password: newPassword,
+            updatedAt: new Date(),
+            updatedBy: isUserExits.id,
+          },
+        }
       );
       res.status(200).send({ message: "password-update-successfully" });
     } else {
@@ -173,6 +187,8 @@ router.patch("/approveRejectMany", async (req, res) => {
         $set: {
           allowed: req.body.action === "accept",
           active: req.body.action === "accept",
+          updatedAt: new Date(),
+          updatedBy: req.body.id,
         },
       }
     );
