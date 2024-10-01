@@ -6,6 +6,7 @@ const cors = require("cors");
 const yuvaRouter = require("./routes/yuva");
 const userRouter = require("./routes/user");
 const yuvaListRoutes = require("./routes/yuvalist");
+const paymentRoutes = require("./routes/payment");
 const app = express();
 
 const PORT = process.env.PORT;
@@ -38,6 +39,7 @@ app.use(cors());
 
 app.use(logger);
 app.use(express.json());
+app.use("/payment", paymentRoutes);
 app.use("/yuva/", yuvaRouter);
 app.use("/user/", userRouter);
 app.use("/yuvalist", yuvaListRoutes);
