@@ -39,7 +39,7 @@ app.use(cors());
 
 app.use(logger);
 app.use(express.json());
-app.use("/payment", paymentRoutes);
+app.use("/webhook", paymentRoutes);
 app.use("/yuva/", yuvaRouter);
 app.use("/user/", userRouter);
 app.use("/yuvalist", yuvaListRoutes);
