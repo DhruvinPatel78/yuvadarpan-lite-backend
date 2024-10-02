@@ -90,7 +90,7 @@ router.post("/sendOtp", async (req, res) => {
         });
       }
       const otpPayload = { email, otp };
-      const otpBody = await OTP.create(otpPayload);
+      await OTP.create(otpPayload);
       res.status(200).json({
         message: `otp-sent-successfully`,
         otp,

@@ -6,12 +6,12 @@ const cors = require("cors");
 const yuvaRouter = require("./routes/yuva");
 const userRouter = require("./routes/user");
 const yuvaListRoutes = require("./routes/yuvalist");
-const paymentRoutes = require("./routes/payment");
+const imageRouter = require("./routes/image");
 const app = express();
 
 const PORT = process.env.PORT;
 
-console.log("port =>", PORT)
+console.log("port =>", PORT);
 
 mongoose.connect(process.env.MONGO_URL).then(() => {
   console.log("Connected to MongoDB");
@@ -39,15 +39,11 @@ app.use(cors());
 
 app.use(logger);
 app.use(express.json());
-app.use("/webhook", paymentRoutes);
 app.use("/yuva/", yuvaRouter);
 app.use("/user/", userRouter);
 app.use("/yuvalist", yuvaListRoutes);
+app.use("/image", imageRouter);
 
 app.listen(PORT, () => {
   console.log(`Server is up and running on ${PORT}`);
-});
-
-app.get("/", (req, res) => {
-  res.send("Hello world!");
 });
