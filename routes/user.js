@@ -100,6 +100,7 @@ router.post("/sendOtp", async (req, res) => {
     }
   }
 });
+
 router.post("/verifyOtp", async (req, res) => {
   if (!errorCheck(req, res)) {
     const { email, otp } = req.body;
@@ -155,6 +156,7 @@ router.patch("/update/:id", async (req, res) => {
     res.json(users);
   }
 });
+
 router.patch("/forgotPassword", async (req, res) => {
   if (!errorCheck(req, res)) {
     const { email, password } = req.body;
