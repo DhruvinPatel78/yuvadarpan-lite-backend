@@ -1,0 +1,95 @@
+const express = require("express");
+const router = express.Router();
+const Samaj = require("../models/samaj");
+
+const errorCheck = (req, res) => {
+  if (req.hasOwnProperty("error")) {
+    const { message } = req.error;
+    res.status(401).send({
+      message: message === "no-token" ? "unauthenticated" : "token-expired",
+    });
+    return true;
+  } else {
+    return false;
+  }
+};
+
+// Get all samaj
+router.get("/list", async (req, res) => {
+  if (!errorCheck(req, res)) {
+    const Samajs = await Samaj.find({ active: { $eq: true } });
+    res.json(Samajs);
+  }
+});
+
+// Get samaj by city id
+router.get("/list/:id", async (req, res) => {
+  if (!errorCheck(req, res)) {
+    const { id } = req.params;
+    const SamajData = await Samaj.find({
+      city_id: { $eq: id },
+      active: { $eq: true },
+    });
+    res.json(SamajData);
+  }
+});
+
+// Get samaj by district id
+router.get("/listByDistrict/:id", async (req, res) => {
+  if (!errorCheck(req, res)) {
+    const { id } = req.params;
+    const SamajData = await Samaj.find({
+      district_id: { $eq: id },
+      active: { $eq: true },
+    });
+    res.json(SamajData);
+  }
+});
+
+// Get samaj by region id
+router.get("/listByRegion/:id", async (req, res) => {
+  if (!errorCheck(req, res)) {
+    const { id } = req.params;
+    const SamajData = await Samaj.find({
+      region_id: { $eq: id },
+      active: { $eq: true },
+    });
+    res.json(SamajData);
+  }
+});
+
+//  Add new samaj
+router.post("/add", async (req, res) => {
+  const data = req.body;
+  const dbSamaj = await Samaj.create({
+    ...data,
+    id: crypto.randomUUID().replace(/-/g, ""),
+    active: true,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    createdBy: null,
+    updatedBy: null,
+  });
+  res.send(dbSamaj);
+});
+
+// Delete samaj by samaj ids
+router.delete("/delete", async (req, res) => {
+  const data = req.body;
+  const dbSamaj = await Samaj.deleteMany({ id: { $in: data.samaj } });
+  res.send(dbSamaj);
+});
+
+//  Get samaj info by samaj id
+router.get("/getInfo/:id", async (req, res) => {
+  if (!errorCheck(req, res)) {
+    const { id } = req.params;
+    const SamajData = await Samaj.find({
+      id: { $eq: id },
+      active: { $eq: true },
+    });
+    res.json(SamajData);
+  }
+});
+
+module.exports = router;

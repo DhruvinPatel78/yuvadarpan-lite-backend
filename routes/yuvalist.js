@@ -46,6 +46,7 @@ router.get("/list", async (req, res) => {
     res.json(dbYuva);
   }
 });
+
 router.get("/list/:id", async (req, res) => {
   if (!errorCheck(req, res)) {
     const dbYuva = await Yuvalist.findById(req.params.id);
@@ -70,6 +71,7 @@ router.post("/addYuvaList", async (req, res) => {
     res.status(403).send({ message: "only-admin-can-create-yuva" });
   }
 });
+
 router.delete("/:id", async (req, res) => {
   if (!errorCheck(req, res)) {
     await Yuvalist.findByIdAndDelete(req.params.id);
@@ -77,6 +79,7 @@ router.delete("/:id", async (req, res) => {
     res.status(200).json(updatedData);
   }
 });
+
 router.patch("/update/:id", async (req, res) => {
   if (!errorCheck(req, res)) {
     await Yuvalist.updateOne({ _id: req.body.id }, { ...req.body });

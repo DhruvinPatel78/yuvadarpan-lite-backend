@@ -1,35 +1,23 @@
 const mongoose = require("mongoose");
 
-const userSchema = new mongoose.Schema({
-  firstName: {
+const samajSchema = new mongoose.Schema({
+  id: {
     type: String,
     required: true,
   },
-  middleName: {
+  name: {
     type: String,
     required: true,
   },
-  lastName: {
+  label: {
     type: String,
     required: true,
   },
-  email: {
+  country_id: {
     type: String,
     required: true,
   },
-  password: {
-    type: String,
-    required: true,
-  },
-  mobile: {
-    type: String,
-    required: true,
-  },
-  familyId: {
-    type: Number,
-    required: true,
-  },
-  dob:{
+  state_id: {
     type: String,
     required: true,
   },
@@ -37,19 +25,25 @@ const userSchema = new mongoose.Schema({
     type: String,
     required: true,
   },
-  samaj_id:{
+  district_id: {
     type: String,
     required: true,
   },
+  city_id: {
+    type: String,
+    required: true,
+  },
+  zipcode: {
+    type: Number,
+    required: true,
+  },
   active: Boolean,
-  allowed: Boolean,
-  role: String,
-  createdAt:Date,
-  updatedAt:Date,
-  createdBy:String,
-  updatedBy:String,
+  createdAt: Date,
+  updatedAt: Date,
+  createdBy: String,
+  updatedBy: String,
 });
 
-const User = mongoose.model("User", userSchema);
+const Samaj = mongoose.model("Samaj", samajSchema);
 
-module.exports = User;
+module.exports = Samaj;

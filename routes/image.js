@@ -46,11 +46,13 @@ router.post("/upload", upload.single("image"), async (req, res) => {
     res.status(500).json({ message: "failed-to-upload" });
   }
 });
+
 router.delete("/:id", async (req, res) => {
   await Images.findByIdAndDelete(req.params.id);
   const updatedData = await Images.find();
   res.status(200).json(updatedData);
 });
+
 router.get("/get-image", async (req, res) => {
   try {
     const Image = await Images.find({});
@@ -59,4 +61,5 @@ router.get("/get-image", async (req, res) => {
     res.status(500).json({ message: "failed-to-get-image" });
   }
 });
+
 module.exports = router;
