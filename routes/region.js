@@ -1,6 +1,38 @@
 const express = require("express");
 const router = express.Router();
 const Region = require("../models/region");
+const jwt = require("jsonwebtoken");
+
+const privateRoutes = ["/add", "/delete"];
+
+const verifyToken = (req, res, next) => {
+  if (privateRoutes.includes(req.url)) {
+    const authHeader = req.headers.authorization;
+    if (authHeader) {
+      jwt.verify(
+        authHeader.replace("Bearer ", ""),
+        process.env.JWT_SECRET,
+        (error, res) => {
+          if (res) {
+            req.user = {
+              email: res.email,
+              role: res.role,
+            };
+          } else {
+            req.error = {
+              message: error.name,
+            };
+          }
+        }
+      );
+    } else {
+      req.error = {
+        message: "no-token",
+      };
+    }
+  }
+  next();
+};
 
 const errorCheck = (req, res) => {
   if (req.hasOwnProperty("error")) {
@@ -13,6 +45,8 @@ const errorCheck = (req, res) => {
     return false;
   }
 };
+
+router.use(verifyToken);
 
 // Get all region
 router.get("/list", async (req, res) => {
@@ -48,36 +82,38 @@ router.get("/list/:id", async (req, res) => {
 
 // Add new region
 router.post("/add", async (req, res) => {
-  const data = req.body;
-  const dbRegion = await Region.create({
-    ...data,
-    id: crypto.randomUUID().replace(/-/g, ""),
-    active: true,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-    createdBy: null,
-    updatedBy: null,
-  });
-  res.send(dbRegion);
+  if (!errorCheck(req, res)) {
+    const data = req.body;
+    const dbRegion = await Region.create({
+      ...data,
+      id: crypto.randomUUID().replace(/-/g, ""),
+      active: true,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      createdBy: null,
+      updatedBy: null,
+    });
+    res.send(dbRegion);
+  }
 });
 
 // Delete regions by region ids
 router.delete("/delete", async (req, res) => {
-  const data = req.body;
-  const dbState = await Region.deleteMany({ id: { $in: data.regions } });
-  res.send(dbState);
+  if (!errorCheck(req, res)) {
+    const data = req.body;
+    const dbState = await Region.deleteMany({ id: { $in: data.regions } });
+    res.send(dbState);
+  }
 });
 
 // Get region info by region id
 router.get("/getInfo/:id", async (req, res) => {
-  if (!errorCheck(req, res)) {
-    const { id } = req.params;
-    const RegionData = await Region.find({
-      id: { $eq: id },
-      active: { $eq: true },
-    });
-    res.json(RegionData);
-  }
+  const { id } = req.params;
+  const RegionData = await Region.find({
+    id: { $eq: id },
+    active: { $eq: true },
+  });
+  res.json(RegionData);
 });
 
 module.exports = router;

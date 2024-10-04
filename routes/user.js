@@ -9,18 +9,23 @@ const OTP = require("../models/OTP");
 const verifyToken = (req, res, next) => {
   const authHeader = req.headers.authorization;
   if (authHeader) {
-    jwt.verify(authHeader, process.env.JWT_SECRET, (error, res) => {
-      if (res) {
-        req.user = {
-          email: res.email,
-          role: res.role,
-        };
-      } else {
-        req.error = {
-          message: error.name,
-        };
+    console.log("AUth =>", authHeader);
+    jwt.verify(
+      authHeader.replace("Bearer ", ""),
+      process.env.JWT_SECRET,
+      (error, res) => {
+        if (res) {
+          req.user = {
+            email: res.email,
+            role: res.role,
+          };
+        } else {
+          req.error = {
+            message: error.name,
+          };
+        }
       }
-    });
+    );
   } else {
     req.error = {
       message: "no-token",
@@ -42,6 +47,7 @@ const errorCheck = (req, res) => {
 };
 
 router.use(verifyToken);
+
 router.get("/list", async (req, res) => {
   if (!errorCheck(req, res)) {
     const users = await User.find({ role: { $ne: "ADMIN" } });
@@ -65,6 +71,7 @@ router.post("/signUp", async (req, res) => {
   user.password = await bcrypt.hash(user.password, 10);
   const dbUser = await User.create({
     ...user,
+    id: crypto.randomUUID().replace(/-/g, ""),
     createdAt: new Date(),
     updatedAt: new Date(),
     createdBy: null,
@@ -127,7 +134,7 @@ router.post("/signIn", async (req, res) => {
     if (passwordMatched) {
       if (dbUser?.allowed) {
         const token = jwt.sign(
-          { email: dbUser.email, role: dbUser.role },
+          { email: dbUser.email, role: dbUser.role, id: dbUser.id },
           process.env.JWT_SECRET,
           {
             expiresIn: "30d",
@@ -162,25 +169,23 @@ router.patch("/update/:id", async (req, res) => {
 });
 
 router.patch("/forgotPassword", async (req, res) => {
-  if (!errorCheck(req, res)) {
-    const { email, password } = req.body;
-    const isUserExits = await User.findOne({ email });
-    if (isUserExits) {
-      const newPassword = await bcrypt.hash(password, 10);
-      await User.updateOne(
-        { _id: isUserExits?.id },
-        {
-          $set: {
-            password: newPassword,
-            updatedAt: new Date(),
-            updatedBy: isUserExits.id,
-          },
-        }
-      );
-      res.status(200).send({ message: "password-update-successfully" });
-    } else {
-      res.status(404).send({ message: "email-invalid" });
-    }
+  const { email, password } = req.body;
+  const isUserExits = await User.findOne({ email });
+  if (isUserExits) {
+    const newPassword = await bcrypt.hash(password, 10);
+    await User.updateOne(
+      { _id: isUserExits?.id },
+      {
+        $set: {
+          password: newPassword,
+          updatedAt: new Date(),
+          updatedBy: isUserExits.id,
+        },
+      }
+    );
+    res.status(200).send({ message: "password-update-successfully" });
+  } else {
+    res.status(404).send({ message: "email-invalid" });
   }
 });
 
