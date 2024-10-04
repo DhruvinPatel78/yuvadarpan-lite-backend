@@ -1,6 +1,10 @@
 const mongoose = require("mongoose");
 
 const userSchema = new mongoose.Schema({
+  id: {
+    type: String,
+    required: true,
+  },
   firstName: {
     type: String,
     required: true,
@@ -29,7 +33,7 @@ const userSchema = new mongoose.Schema({
     type: Number,
     required: true,
   },
-  dob:{
+  dob: {
     type: String,
     required: true,
   },
@@ -37,17 +41,17 @@ const userSchema = new mongoose.Schema({
     type: String,
     required: true,
   },
-  samaj_id:{
+  samaj_id: {
     type: String,
     required: true,
   },
   active: Boolean,
   allowed: Boolean,
   role: String,
-  createdAt:Date,
-  updatedAt:Date,
-  createdBy:String,
-  updatedBy:String,
+  createdAt: Date,
+  updatedAt: Date,
+  createdBy: String,
+  updatedBy: String,
 });
 
 const User = mongoose.model("User", userSchema);

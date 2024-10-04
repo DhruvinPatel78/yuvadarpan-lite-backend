@@ -1,6 +1,38 @@
 const express = require("express");
 const router = express.Router();
 const Samaj = require("../models/samaj");
+const jwt = require("jsonwebtoken");
+
+const privateRoutes = ["/add", "/delete"];
+
+const verifyToken = (req, res, next) => {
+  if (privateRoutes.includes(req.url)) {
+    const authHeader = req.headers.authorization;
+    if (authHeader) {
+      jwt.verify(
+        authHeader.replace("Bearer ", ""),
+        process.env.JWT_SECRET,
+        (error, res) => {
+          if (res) {
+            req.user = {
+              email: res.email,
+              role: res.role,
+            };
+          } else {
+            req.error = {
+              message: error.name,
+            };
+          }
+        }
+      );
+    } else {
+      req.error = {
+        message: "no-token",
+      };
+    }
+  }
+  next();
+};
 
 const errorCheck = (req, res) => {
   if (req.hasOwnProperty("error")) {
@@ -13,6 +45,8 @@ const errorCheck = (req, res) => {
     return false;
   }
 };
+
+router.use(verifyToken);
 
 // Get all samaj
 router.get("/list", async (req, res) => {
@@ -60,36 +94,38 @@ router.get("/listByRegion/:id", async (req, res) => {
 
 //  Add new samaj
 router.post("/add", async (req, res) => {
-  const data = req.body;
-  const dbSamaj = await Samaj.create({
-    ...data,
-    id: crypto.randomUUID().replace(/-/g, ""),
-    active: true,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-    createdBy: null,
-    updatedBy: null,
-  });
-  res.send(dbSamaj);
+  if (!errorCheck(req, res)) {
+    const data = req.body;
+    const dbSamaj = await Samaj.create({
+      ...data,
+      id: crypto.randomUUID().replace(/-/g, ""),
+      active: true,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      createdBy: null,
+      updatedBy: null,
+    });
+    res.send(dbSamaj);
+  }
 });
 
 // Delete samaj by samaj ids
 router.delete("/delete", async (req, res) => {
-  const data = req.body;
-  const dbSamaj = await Samaj.deleteMany({ id: { $in: data.samaj } });
-  res.send(dbSamaj);
+  if (!errorCheck(req, res)) {
+    const data = req.body;
+    const dbSamaj = await Samaj.deleteMany({ id: { $in: data.samaj } });
+    res.send(dbSamaj);
+  }
 });
 
 //  Get samaj info by samaj id
 router.get("/getInfo/:id", async (req, res) => {
-  if (!errorCheck(req, res)) {
-    const { id } = req.params;
-    const SamajData = await Samaj.find({
-      id: { $eq: id },
-      active: { $eq: true },
-    });
-    res.json(SamajData);
-  }
+  const { id } = req.params;
+  const SamajData = await Samaj.find({
+    id: { $eq: id },
+    active: { $eq: true },
+  });
+  res.json(SamajData);
 });
 
 module.exports = router;
