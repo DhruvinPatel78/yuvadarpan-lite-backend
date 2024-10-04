@@ -6,18 +6,22 @@ const Yuvalist = require("../models/yuvalist");
 const verifyToken = (req, res, next) => {
   const authHeader = req.headers.authorization;
   if (authHeader) {
-    jwt.verify(authHeader, process.env.JWT_SECRET, (error, res) => {
-      if (res) {
-        req.user = {
-          email: res.email,
-          role: res.role,
-        };
-      } else {
-        req.error = {
-          message: error.name,
-        };
+    jwt.verify(
+      authHeader.replace("Bearer ", ""),
+      process.env.JWT_SECRET,
+      (error, res) => {
+        if (res) {
+          req.user = {
+            email: res.email,
+            role: res.role,
+          };
+        } else {
+          req.error = {
+            message: error.name,
+          };
+        }
       }
-    });
+    );
   } else {
     req.error = {
       message: "no-token",
