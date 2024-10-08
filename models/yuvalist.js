@@ -1,6 +1,4 @@
 const mongoose = require("mongoose");
-// profile: "",
-// profileUrl: "",
 const mamaInfoSchema = new mongoose.Schema({
   name: String,
   city: String,
@@ -12,14 +10,9 @@ const contactInfoSchema = new mongoose.Schema({
   relation: String,
 });
 const profileSchema = new mongoose.Schema({
-  // name:String,
-  // url:String,
+  url:String,
   name: String,
-  lastModified: Number,
-  lastModifiedDate: Date,
-  size: Number,
-  type: String,
-  webkitRelativePath: String,
+  awsId: String,
 });
 const yuvaListSchema = new mongoose.Schema({
   familyId: {
@@ -97,7 +90,7 @@ const yuvaListSchema = new mongoose.Schema({
     type: Date,
     default: Date.now,
   },
-  profile: String,
+  profile: profileSchema,
   active: Boolean,
 });
 
