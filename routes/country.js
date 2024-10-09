@@ -51,7 +51,7 @@ router.use(verifyToken);
 // Get all countries
 router.get("/list", async (req, res) => {
   if (!errorCheck(req, res)) {
-    const Countries = await Country.find({ active: { $eq: true } });
+    const Countries = await Country.find();
     res.json(Countries);
   }
 });
@@ -90,6 +90,17 @@ router.get("/getInfo/:id", async (req, res) => {
     active: { $eq: true },
   });
   res.json(Countries);
+});
+router.patch("/update/:id", async (req, res) => {
+  if (!errorCheck(req, res)) {
+    const payload = { ...req.body };
+    await Country.updateOne(
+      { id: req.body.id },
+      { ...payload, updatedAt: new Date(), updatedBy: req.body.id }
+    );
+    const users = await Country.find();
+    res.json(users);
+  }
 });
 
 module.exports = router;

@@ -10,7 +10,7 @@ const contactInfoSchema = new mongoose.Schema({
   relation: String,
 });
 const profileSchema = new mongoose.Schema({
-  url:String,
+  url: String,
   name: String,
   awsId: String,
 });
@@ -27,17 +27,13 @@ const yuvaListSchema = new mongoose.Schema({
     type: String,
     required: true,
   },
-  middleName: {
-    type: String,
-    required: true,
-  },
+  fatherName: String,
   lastName: {
     type: String,
     required: true,
   },
   dob: {
     type: Date,
-    default: Date.now,
     required: true,
   },
   motherName: {
@@ -49,6 +45,10 @@ const yuvaListSchema = new mongoose.Schema({
     required: true,
   },
   firmAddress: {
+    type: String,
+    required: true,
+  },
+  address: {
     type: String,
     required: true,
   },
@@ -78,6 +78,14 @@ const yuvaListSchema = new mongoose.Schema({
     type: String,
     required: true,
   },
+  gender: {
+    type: String,
+  },
+  pob: String,
+  activity: String,
+  martialStatus: String,
+  grandFatherName: String,
+  email: String,
   weight: {
     type: String,
     required: true,
