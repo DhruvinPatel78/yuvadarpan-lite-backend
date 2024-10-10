@@ -17,6 +17,7 @@ const verifyToken = (req, res, next) => {
             req.user = {
               email: res.email,
               role: res.role,
+              id: res.id,
             };
           } else {
             req.error = {
@@ -65,8 +66,8 @@ router.post("/add", async (req, res) => {
       id: crypto.randomUUID().replace(/-/g, ""),
       active: true,
       createdAt: new Date(),
-      updatedAt: new Date(),
-      createdBy: null,
+      updatedAt: null,
+      createdBy: req.user.id,
       updatedBy: null,
     });
     res.send(dbCountry);
@@ -91,6 +92,7 @@ router.get("/getInfo/:id", async (req, res) => {
   });
   res.json(Countries);
 });
+
 router.patch("/update/:id", async (req, res) => {
   if (!errorCheck(req, res)) {
     const payload = { ...req.body };

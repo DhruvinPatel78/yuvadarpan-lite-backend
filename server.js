@@ -13,7 +13,8 @@ const regionRouter = require("./routes/region");
 const districtRouter = require("./routes/district");
 const cityRouter = require("./routes/city");
 const samajRouter = require("./routes/samaj");
-const { specs, swaggerUi } = require('./swagger');
+const surnameRouter = require("./routes/surname");
+const { specs, swaggerUi } = require("./swagger");
 
 const app = express();
 
@@ -48,7 +49,7 @@ app.use(cors());
 app.use(logger);
 app.use(express.json());
 
-app.use('/swagger', swaggerUi.serve, swaggerUi.setup(specs));
+app.use("/swagger", swaggerUi.serve, swaggerUi.setup(specs));
 
 app.use("/yuva", yuvaRouter);
 app.use("/user", userRouter);
@@ -60,6 +61,7 @@ app.use("/region", regionRouter);
 app.use("/district", districtRouter);
 app.use("/city", cityRouter);
 app.use("/samaj", samajRouter);
+app.use("/surname", surnameRouter);
 
 app.listen(PORT, () => {
   console.log(`Server is up and running on ${PORT}`);
