@@ -1,6 +1,6 @@
 const express = require("express");
 const router = express.Router();
-const Country = require("../models/country");
+const Surname = require("../models/surname");
 const jwt = require("jsonwebtoken");
 
 const privateRoutes = ["/add", "/delete"];
@@ -52,7 +52,7 @@ router.use(verifyToken);
 // Get all countries
 router.get("/list", async (req, res) => {
   if (!errorCheck(req, res)) {
-    const Countries = await Country.find({ active: { $eq: true } });
+    const Countries = await Surname.find({ active: { $eq: true } });
     res.json(Countries);
   }
 });
@@ -61,7 +61,7 @@ router.get("/list", async (req, res) => {
 router.post("/add", async (req, res) => {
   if (!errorCheck(req, res)) {
     const data = req.body;
-    const dbCountry = await Country.create({
+    const dbSurname = await Surname.create({
       ...data,
       id: crypto.randomUUID().replace(/-/g, ""),
       active: true,
@@ -70,7 +70,7 @@ router.post("/add", async (req, res) => {
       createdBy: req.user.id,
       updatedBy: null,
     });
-    res.send(dbCountry);
+    res.send(dbSurname);
   }
 });
 
@@ -78,15 +78,15 @@ router.post("/add", async (req, res) => {
 router.delete("/delete", async (req, res) => {
   if (!errorCheck(req, res)) {
     const data = req.body;
-    const dbCountry = await Country.deleteMany({ id: { $in: data.countries } });
-    res.send(dbCountry);
+    const dbSurname = await Surname.deleteMany({ id: { $in: data.surnames } });
+    res.send(dbSurname);
   }
 });
 
 // Get country info by country id
 router.get("/getInfo/:id", async (req, res) => {
   const { id } = req.params;
-  const Countries = await Country.find({
+  const Countries = await Surname.find({
     id: { $eq: id },
     active: { $eq: true },
   });

@@ -17,6 +17,7 @@ const verifyToken = (req, res, next) => {
             req.user = {
               email: res.email,
               role: res.role,
+              id: res.id,
             };
           } else {
             req.error = {
@@ -83,8 +84,8 @@ router.post("/add", async (req, res) => {
       id: crypto.randomUUID().replace(/-/g, ""),
       active: true,
       createdAt: new Date(),
-      updatedAt: new Date(),
-      createdBy: null,
+      updatedAt: null,
+      createdBy: req.user.id,
       updatedBy: null,
     });
     res.send(dbDistrict);
