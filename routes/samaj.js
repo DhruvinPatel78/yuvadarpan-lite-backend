@@ -17,6 +17,7 @@ const verifyToken = (req, res, next) => {
             req.user = {
               email: res.email,
               role: res.role,
+              id: res.id,
             };
           } else {
             req.error = {
@@ -50,46 +51,38 @@ router.use(verifyToken);
 
 // Get all samaj
 router.get("/list", async (req, res) => {
-  if (!errorCheck(req, res)) {
-    const Samajs = await Samaj.find({ active: { $eq: true } });
-    res.json(Samajs);
-  }
+  const Samajs = await Samaj.find({ active: { $eq: true } });
+  res.json(Samajs);
 });
 
 // Get samaj by city id
 router.get("/list/:id", async (req, res) => {
-  if (!errorCheck(req, res)) {
-    const { id } = req.params;
-    const SamajData = await Samaj.find({
-      city_id: { $eq: id },
-      active: { $eq: true },
-    });
-    res.json(SamajData);
-  }
+  const { id } = req.params;
+  const SamajData = await Samaj.find({
+    city_id: { $eq: id },
+    active: { $eq: true },
+  });
+  res.json(SamajData);
 });
 
 // Get samaj by district id
 router.get("/listByDistrict/:id", async (req, res) => {
-  if (!errorCheck(req, res)) {
-    const { id } = req.params;
-    const SamajData = await Samaj.find({
-      district_id: { $eq: id },
-      active: { $eq: true },
-    });
-    res.json(SamajData);
-  }
+  const { id } = req.params;
+  const SamajData = await Samaj.find({
+    district_id: { $eq: id },
+    active: { $eq: true },
+  });
+  res.json(SamajData);
 });
 
 // Get samaj by region id
 router.get("/listByRegion/:id", async (req, res) => {
-  if (!errorCheck(req, res)) {
-    const { id } = req.params;
-    const SamajData = await Samaj.find({
-      region_id: { $eq: id },
-      active: { $eq: true },
-    });
-    res.json(SamajData);
-  }
+  const { id } = req.params;
+  const SamajData = await Samaj.find({
+    region_id: { $eq: id },
+    active: { $eq: true },
+  });
+  res.json(SamajData);
 });
 
 //  Add new samaj
@@ -101,8 +94,8 @@ router.post("/add", async (req, res) => {
       id: crypto.randomUUID().replace(/-/g, ""),
       active: true,
       createdAt: new Date(),
-      updatedAt: new Date(),
-      createdBy: null,
+      updatedAt: null,
+      createdBy: req.user.id,
       updatedBy: null,
     });
     res.send(dbSamaj);

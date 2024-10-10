@@ -1,6 +1,6 @@
 const mongoose = require("mongoose");
 
-const stateSchema = new mongoose.Schema({
+const surNameSchema = new mongoose.Schema({
   id: {
     type: String,
     required: true,
@@ -9,7 +9,11 @@ const stateSchema = new mongoose.Schema({
     type: String,
     required: true,
   },
-  country_id: {
+  gotra: {
+    type: String,
+    required: true,
+  },
+  mainBranch: {
     type: String,
     required: true,
   },
@@ -20,6 +24,6 @@ const stateSchema = new mongoose.Schema({
   updatedBy: String,
 });
 
-const State = mongoose.model("State", stateSchema);
+const Surname = mongoose.model("Surname", surNameSchema);
 
-module.exports = State;
+module.exports = Surname;

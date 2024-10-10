@@ -10,7 +10,7 @@ const contactInfoSchema = new mongoose.Schema({
   relation: String,
 });
 const profileSchema = new mongoose.Schema({
-  url:String,
+  url: String,
   name: String,
   awsId: String,
 });
@@ -82,16 +82,12 @@ const yuvaListSchema = new mongoose.Schema({
     type: String,
     required: true,
   },
-  createdAt: {
-    type: Date,
-    default: Date.now,
-  },
-  updatedAt: {
-    type: Date,
-    default: Date.now,
-  },
   profile: profileSchema,
   active: Boolean,
+  createdAt: Date,
+  updatedAt: Date,
+  createdBy: String,
+  updatedBy: String,
 });
 
 const Yuvalist = mongoose.model("YuvaList", yuvaListSchema);
