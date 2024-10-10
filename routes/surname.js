@@ -1,6 +1,6 @@
 const express = require("express");
 const router = express.Router();
-const State = require("../models/state");
+const Surname = require("../models/surname");
 const jwt = require("jsonwebtoken");
 
 const privateRoutes = ["/add", "/delete"];
@@ -49,27 +49,19 @@ const errorCheck = (req, res) => {
 
 router.use(verifyToken);
 
-// Get all states
+// Get all countries
 router.get("/list", async (req, res) => {
-  const States = await State.find({ active: { $eq: true } });
-  res.json(States);
+  if (!errorCheck(req, res)) {
+    const Countries = await Surname.find({ active: { $eq: true } });
+    res.json(Countries);
+  }
 });
 
-// Get states by country id
-router.get("/list/:id", async (req, res) => {
-  const { id } = req.params;
-  const States = await State.find({
-    country_id: { $eq: id },
-    active: { $eq: true },
-  });
-  res.json(States);
-});
-
-// Add new state
+// Add new country
 router.post("/add", async (req, res) => {
   if (!errorCheck(req, res)) {
     const data = req.body;
-    const dbState = await State.create({
+    const dbSurname = await Surname.create({
       ...data,
       id: crypto.randomUUID().replace(/-/g, ""),
       active: true,
@@ -78,27 +70,27 @@ router.post("/add", async (req, res) => {
       createdBy: req.user.id,
       updatedBy: null,
     });
-    res.send(dbState);
+    res.send(dbSurname);
   }
 });
 
-// Delete states by state ids
+// Delete countries by country ids
 router.delete("/delete", async (req, res) => {
   if (!errorCheck(req, res)) {
     const data = req.body;
-    const dbState = await State.deleteMany({ id: { $in: data.states } });
-    res.send(dbState);
+    const dbSurname = await Surname.deleteMany({ id: { $in: data.surnames } });
+    res.send(dbSurname);
   }
 });
 
-// Get state info by state id
+// Get country info by country id
 router.get("/getInfo/:id", async (req, res) => {
   const { id } = req.params;
-  const StateData = await State.find({
+  const Countries = await Surname.find({
     id: { $eq: id },
     active: { $eq: true },
   });
-  res.json(StateData);
+  res.json(Countries);
 });
 
 module.exports = router;

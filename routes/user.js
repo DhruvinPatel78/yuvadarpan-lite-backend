@@ -73,7 +73,7 @@ router.post("/signUp", async (req, res) => {
     ...user,
     id: crypto.randomUUID().replace(/-/g, ""),
     createdAt: new Date(),
-    updatedAt: new Date(),
+    updatedAt: null,
     createdBy: null,
     updatedBy: null,
   });
