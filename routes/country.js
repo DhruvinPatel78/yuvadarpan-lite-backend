@@ -92,6 +92,7 @@ router.get("/getInfo/:id", async (req, res) => {
   });
   res.json(Countries);
 });
+
 router.patch("/update/:id", async (req, res) => {
   if (!errorCheck(req, res)) {
     const payload = { ...req.body };
