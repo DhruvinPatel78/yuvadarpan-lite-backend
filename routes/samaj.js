@@ -3,10 +3,10 @@ const router = express.Router();
 const Samaj = require("../models/samaj");
 const jwt = require("jsonwebtoken");
 
-const privateRoutes = ["/add", "/delete"];
+const privateRoutes = ["POST", "DELETE", "PATCH"];
 
 const verifyToken = (req, res, next) => {
-  if (privateRoutes.includes(req.url)) {
+  if (privateRoutes.includes(req.method)) {
     const authHeader = req.headers.authorization;
     if (authHeader) {
       jwt.verify(
@@ -106,7 +106,8 @@ router.post("/add", async (req, res) => {
 router.delete("/delete", async (req, res) => {
   if (!errorCheck(req, res)) {
     const data = req.body;
-    const dbSamaj = await Samaj.deleteMany({ id: { $in: data.samaj } });
+    await Samaj.deleteMany({ id: { $in: data.samaj } });
+    const dbSamaj = await Samaj.find();
     res.send(dbSamaj);
   }
 });

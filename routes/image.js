@@ -4,10 +4,10 @@ const AWS = require("aws-sdk");
 const fs = require("fs");
 const multer = require("multer");
 const jwt = require("jsonwebtoken");
-const privateRoutes = ["/upload"];
+const privateRoutes = ["POST", "DELETE", "PATCH"];
 
 const verifyToken = (req, res, next) => {
-  if (privateRoutes.includes(req.url)) {
+  if (privateRoutes.includes(req.method)) {
     const authHeader = req.headers.authorization;
     if (authHeader) {
       jwt.verify(

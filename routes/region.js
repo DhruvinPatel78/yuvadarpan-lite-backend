@@ -3,10 +3,10 @@ const router = express.Router();
 const Region = require("../models/region");
 const jwt = require("jsonwebtoken");
 
-const privateRoutes = ["/add", "/delete"];
+const privateRoutes = ["POST", "DELETE", "PATCH"];
 
 const verifyToken = (req, res, next) => {
-  if (privateRoutes.includes(req.url)) {
+  if (privateRoutes.includes(req.method)) {
     const authHeader = req.headers.authorization;
     if (authHeader) {
       jwt.verify(
@@ -51,34 +51,28 @@ router.use(verifyToken);
 
 // Get all region
 router.get("/list", async (req, res) => {
-  if (!errorCheck(req, res)) {
-    const Regions = await Region.find({ active: { $eq: true } });
-    res.json(Regions);
-  }
+  const Regions = await Region.find({ active: { $eq: true } });
+  res.json(Regions);
 });
 
 // Get all regions by country id
 router.get("/listByCountry/:id", async (req, res) => {
-  if (!errorCheck(req, res)) {
-    const { id } = req.params;
-    const RegionData = await Region.find({
-      country_id: { $eq: id },
-      active: { $eq: true },
-    });
-    res.json(RegionData);
-  }
+  const { id } = req.params;
+  const RegionData = await Region.find({
+    country_id: { $eq: id },
+    active: { $eq: true },
+  });
+  res.json(RegionData);
 });
 
 // Get all regions by state id
 router.get("/list/:id", async (req, res) => {
-  if (!errorCheck(req, res)) {
-    const { id } = req.params;
-    const RegionData = await Region.find({
-      state_id: { $eq: id },
-      active: { $eq: true },
-    });
-    res.json(RegionData);
-  }
+  const { id } = req.params;
+  const RegionData = await Region.find({
+    state_id: { $eq: id },
+    active: { $eq: true },
+  });
+  res.json(RegionData);
 });
 
 // Add new region
@@ -102,7 +96,8 @@ router.post("/add", async (req, res) => {
 router.delete("/delete", async (req, res) => {
   if (!errorCheck(req, res)) {
     const data = req.body;
-    const dbState = await Region.deleteMany({ id: { $in: data.regions } });
+    await Region.deleteMany({ id: { $in: data.regions } });
+    const dbState = await Region.find();
     res.send(dbState);
   }
 });
