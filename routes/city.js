@@ -3,10 +3,10 @@ const router = express.Router();
 const City = require("../models/city");
 const jwt = require("jsonwebtoken");
 
-const privateRoutes = ["/add", "/delete"];
+const privateRoutes = ["POST", "DELETE", "PATCH"];
 
 const verifyToken = (req, res, next) => {
-  if (privateRoutes.includes(req.url)) {
+  if (privateRoutes.includes(req.method)) {
     const authHeader = req.headers.authorization;
     if (authHeader) {
       jwt.verify(
@@ -96,7 +96,8 @@ router.post("/add", async (req, res) => {
 router.delete("/delete", async (req, res) => {
   if (!errorCheck(req, res)) {
     const data = req.body;
-    const dbCity = await City.deleteMany({ id: { $in: data.cities } });
+    await City.deleteMany({ id: { $in: data.cities } });
+    const dbCity = await City.find();
     res.send(dbCity);
   }
 });

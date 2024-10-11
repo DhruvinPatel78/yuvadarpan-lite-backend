@@ -3,10 +3,10 @@ const router = express.Router();
 const Country = require("../models/country");
 const jwt = require("jsonwebtoken");
 
-const privateRoutes = ["/add", "/delete"];
+const privateRoutes = ["POST", "DELETE", "PATCH"];
 
 const verifyToken = (req, res, next) => {
-  if (privateRoutes.includes(req.url)) {
+  if (privateRoutes.includes(req.method)) {
     const authHeader = req.headers.authorization;
     if (authHeader) {
       jwt.verify(
@@ -51,10 +51,8 @@ router.use(verifyToken);
 
 // Get all countries
 router.get("/list", async (req, res) => {
-  if (!errorCheck(req, res)) {
-    const Countries = await Country.find();
-    res.json(Countries);
-  }
+  const Countries = await Country.find();
+  res.json(Countries);
 });
 
 // Add new country
@@ -78,8 +76,9 @@ router.post("/add", async (req, res) => {
 router.delete("/delete", async (req, res) => {
   if (!errorCheck(req, res)) {
     const data = req.body;
-    const dbCountry = await Country.deleteMany({ id: { $in: data.countries } });
-    res.send(dbCountry);
+    await Country.deleteMany({ id: { $in: data?.countries } });
+    const dbCountry = await Country.find();
+    res.json(dbCountry);
   }
 });
 
@@ -95,10 +94,11 @@ router.get("/getInfo/:id", async (req, res) => {
 
 router.patch("/update/:id", async (req, res) => {
   if (!errorCheck(req, res)) {
+    const { id } = req.params;
     const payload = { ...req.body };
     await Country.updateOne(
-      { id: req.body.id },
-      { ...payload, updatedAt: new Date(), updatedBy: req.body.id }
+      { id: id },
+      { ...payload, updatedAt: new Date(), updatedBy: req?.user.id }
     );
     const users = await Country.find();
     res.json(users);

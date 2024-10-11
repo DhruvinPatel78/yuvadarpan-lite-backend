@@ -3,10 +3,10 @@ const router = express.Router();
 const Surname = require("../models/surname");
 const jwt = require("jsonwebtoken");
 
-const privateRoutes = ["/add", "/delete"];
+const privateRoutes = ["POST", "DELETE", "PATCH"];
 
 const verifyToken = (req, res, next) => {
-  if (privateRoutes.includes(req.url)) {
+  if (privateRoutes.includes(req.method)) {
     const authHeader = req.headers.authorization;
     if (authHeader) {
       jwt.verify(
@@ -51,10 +51,8 @@ router.use(verifyToken);
 
 // Get all countries
 router.get("/list", async (req, res) => {
-  if (!errorCheck(req, res)) {
-    const Countries = await Surname.find({ active: { $eq: true } });
-    res.json(Countries);
-  }
+  const Countries = await Surname.find({ active: { $eq: true } });
+  res.json(Countries);
 });
 
 // Add new country
@@ -78,7 +76,8 @@ router.post("/add", async (req, res) => {
 router.delete("/delete", async (req, res) => {
   if (!errorCheck(req, res)) {
     const data = req.body;
-    const dbSurname = await Surname.deleteMany({ id: { $in: data.surnames } });
+    await Surname.deleteMany({ id: { $in: data?.surnames } });
+    const dbSurname = await Surname.find();
     res.send(dbSurname);
   }
 });
