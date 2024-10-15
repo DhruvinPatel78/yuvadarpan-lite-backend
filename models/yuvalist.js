@@ -86,16 +86,19 @@ const yuvaListSchema = new mongoose.Schema({
   martialStatus: String,
   grandFatherName: String,
   email: String,
+  YSKno: String,
   weight: {
     type: String,
     required: true,
   },
   profile: profileSchema,
   active: Boolean,
+  handicap: Boolean,
   createdAt: Date,
   updatedAt: Date,
   createdBy: String,
   updatedBy: String,
+  handicapDetails: String,
 });
 
 const Yuvalist = mongoose.model("YuvaList", yuvaListSchema);
