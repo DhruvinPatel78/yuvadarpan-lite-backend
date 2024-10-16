@@ -37,11 +37,11 @@ const userSchema = new mongoose.Schema({
     type: String,
     required: true,
   },
-  region_id: {
+  region: {
     type: String,
     required: true,
   },
-  samaj_id: {
+  localSamaj: {
     type: String,
     required: true,
   },
