@@ -9,15 +9,15 @@ const OTP = require("../models/OTP");
 const verifyToken = (req, res, next) => {
   const authHeader = req.headers.authorization;
   if (authHeader) {
-    console.log("AUth =>", authHeader);
     jwt.verify(
-      authHeader.replace("Bearer ", ""),
+      authHeader.replace("Bearer", ""),
       process.env.JWT_SECRET,
       (error, res) => {
         if (res) {
           req.user = {
             email: res.email,
             role: res.role,
+            id: res.id,
           };
         } else {
           req.error = {
@@ -50,19 +50,61 @@ router.use(verifyToken);
 
 router.get("/list", async (req, res) => {
   if (!errorCheck(req, res)) {
-    const users = await User.find({ role: { $ne: "ADMIN" } });
-    res.json(users);
+    const { id, role } = req.user;
+    const page = parseInt(req.query.page, 10) || 1;
+    const limit = parseInt(req.query.limit, 10) || 10;
+    const offset = (page - 1) * limit;
+    if (role === "ADMIN") {
+      const users = await User.find({}).skip(offset).limit(limit).exec();
+      const totalItems = await User.countDocuments({});
+      const totalPages = Math.ceil(totalItems / limit);
+      res
+        .status(200)
+        .json({ total: totalItems, page, totalPages, data: users });
+    } else if (role === "MANAGER") {
+      const mangerRegion = await User.findById(id);
+      if (mangerRegion?.region) {
+        const MangerUsers = await User.find({
+          role: { $eq: role },
+          region: { $eq: mangerRegion?.region },
+        })
+          .skip(offset)
+          .limit(limit)
+          .exec();
+        const managerTotalItem=await User.find({
+          role: { $eq: role },
+          region: { $eq: mangerRegion?.region },
+        }).countDocuments({})
+        const totalPages = Math.ceil(managerTotalItem / limit);
+        res
+          .status(200)
+          .json({ total: managerTotalItem, page, totalPages, data: MangerUsers });
+      }
+    }
   }
 });
 
 router.get("/requests", async (req, res) => {
   if (!errorCheck(req, res)) {
-    const users = await User.find({
-      allowed: false,
-      active: true,
-      role: { $ne: "ADMIN" },
-    });
-    res.json(users);
+    const { id, role } = req.user;
+    if (role === "ADMIN") {
+      const users = await User.find({
+        allowed: { $eq: false },
+        active: true,
+      });
+      res.status(200).json(users);
+    } else if (role === "MANAGER") {
+      const mangerRegion = await User.findById(id);
+      if (mangerRegion?.region) {
+        const MangerUsers = await User.find({
+          allowed: { $eq: false },
+          active: true,
+          role: { $eq: role },
+          region: { $eq: mangerRegion?.region },
+        });
+        res.status(200).json(MangerUsers);
+      }
+    }
   }
 });
 
@@ -76,6 +118,8 @@ router.post("/signUp", async (req, res) => {
     updatedAt: null,
     createdBy: null,
     updatedBy: null,
+    active: true,
+    allowed: false,
   });
   res.send(dbUser);
 });
@@ -155,6 +199,7 @@ router.post("/signIn", async (req, res) => {
 
 router.patch("/update/:id", async (req, res) => {
   if (!errorCheck(req, res)) {
+    const { id, role } = req.user;
     const payload = { ...req.body };
     if (payload?.password) {
       payload.password = await bcrypt.hash(payload.password, 10);
@@ -163,8 +208,24 @@ router.patch("/update/:id", async (req, res) => {
       { _id: req.body.id },
       { ...payload, updatedAt: new Date(), updatedBy: req.body.id }
     );
-    const users = await User.find({ role: { $ne: "ADMIN" } });
-    res.json(users);
+    if (role === "ADMIN") {
+      const users = await User.find({
+        allowed: { $eq: false },
+        active: true,
+      });
+      res.status(200).json(users);
+    } else if (role === "MANAGER") {
+      const mangerRegion = await User.findById(id);
+      if (mangerRegion?.region) {
+        const MangerUsers = await User.find({
+          allowed: { $eq: false },
+          active: true,
+          role: { $eq: role },
+          region: { $eq: mangerRegion?.region },
+        });
+        res.status(200).json(MangerUsers);
+      }
+    }
   }
 });
 
@@ -191,7 +252,8 @@ router.patch("/forgotPassword", async (req, res) => {
 
 router.patch("/approveRejectMany", async (req, res) => {
   if (!errorCheck(req, res)) {
-    const d = User.find({ _id: { $ne: req.body.ids } });
+    const { id, role } = req.user;
+    await User.find({ _id: { $ne: req.body.ids } });
     await User.updateMany(
       { _id: { $in: req.body.ids } },
       {
@@ -203,12 +265,23 @@ router.patch("/approveRejectMany", async (req, res) => {
         },
       }
     );
-    const users = await User.find({
-      allowed: false,
-      active: true,
-      role: { $ne: "ADMIN" },
-    });
-    res.json(users);
+    if (role === "ADMIN") {
+      const users = await User.find({
+        allowed: false,
+        active: true,
+      });
+      res.status(200).json(users);
+    } else if (role === "MANAGER") {
+      const mangerRegion = await User.findById(id);
+      if (mangerRegion?.region) {
+        const MangerUsers = await User.find({
+          allowed: false,
+          active: true,
+          region: { $ne: mangerRegion?.region },
+        });
+        res.status(200).json(MangerUsers);
+      }
+    }
   }
 });
 
