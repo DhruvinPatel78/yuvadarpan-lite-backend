@@ -14,6 +14,7 @@ const verifyToken = (req, res, next) => {
           req.user = {
             email: res.email,
             role: res.role,
+            id: res.id,
           };
         } else {
           req.error = {

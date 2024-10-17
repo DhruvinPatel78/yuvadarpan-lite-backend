@@ -94,6 +94,7 @@ const yuvaListSchema = new mongoose.Schema({
   profile: profileSchema,
   active: Boolean,
   handicap: Boolean,
+  manglik: { type: Boolean, default: false },
   createdAt: Date,
   updatedAt: Date,
   createdBy: String,
