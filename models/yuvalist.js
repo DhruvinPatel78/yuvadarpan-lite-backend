@@ -98,6 +98,9 @@ const yuvaListSchema = new mongoose.Schema({
   createdAt: Date,
   updatedAt: Date,
   createdBy: String,
+  region: String,
+  district: String,
+  localSamaj: String,
   updatedBy: String,
   handicapDetails: String,
 });
