@@ -2,6 +2,7 @@ const express = require("express");
 const jwt = require("jsonwebtoken");
 const router = express.Router();
 const Yuvalist = require("../models/yuvalist");
+const User = require("../models/user");
 
 const verifyToken = (req, res, next) => {
   const authHeader = req.headers.authorization;
@@ -47,8 +48,58 @@ const errorCheck = (req, res) => {
 
 router.get("/list", async (req, res) => {
   if (!errorCheck(req, res)) {
-    const dbYuva = await Yuvalist.find();
-    res.json(dbYuva);
+    const { id, role } = req.user;
+    const page = parseInt(req.query.page, 10) || 1;
+    const limit = parseInt(req.query.limit, 10) || 10;
+    const offset = (page - 1) * limit;
+    if (role === "ADMIN") {
+      const yuvas = await Yuvalist.find({}).skip(offset).limit(limit).exec();
+      const totalItems = await Yuvalist.countDocuments({});
+      const totalPages = Math.ceil(totalItems / limit);
+      res
+        .status(200)
+        .json({ total: totalItems, page, totalPages, data: yuvas });
+    } else if (role === "REGION_MANAGER") {
+      const mangerRegion = await User.findById(id);
+      if (mangerRegion?.region) {
+        const MangerYuvas = await Yuvalist.find({
+          region: { $eq: mangerRegion?.region },
+        })
+          .skip(offset)
+          .limit(limit)
+          .exec();
+        const managerTotalItem = await Yuvalist.find({
+          region: { $eq: mangerRegion?.region },
+        }).countDocuments({});
+        const totalPages = Math.ceil(managerTotalItem / limit);
+        res.status(200).json({
+          total: managerTotalItem,
+          page,
+          totalPages,
+          data: MangerYuvas,
+        });
+      }
+    } else if (role === "SAMAJ_MANAGER") {
+      const mangerSamaj = await User.findById(id);
+      if (mangerSamaj?.localSamaj) {
+        const MangerYuvas = await Yuvalist.find({
+          localSamaj: { $eq: mangerSamaj?.localSamaj },
+        })
+          .skip(offset)
+          .limit(limit)
+          .exec();
+        const managerTotalItem = await Yuvalist.find({
+          localSamaj: { $eq: mangerSamaj?.localSamaj },
+        }).countDocuments({});
+        const totalPages = Math.ceil(managerTotalItem / limit);
+        res.status(200).json({
+          total: managerTotalItem,
+          page,
+          totalPages,
+          data: MangerYuvas,
+        });
+      }
+    }
   }
 });
 
@@ -80,16 +131,14 @@ router.post("/addYuvaList", async (req, res) => {
 router.delete("/:id", async (req, res) => {
   if (!errorCheck(req, res)) {
     await Yuvalist.findByIdAndDelete(req.params.id);
-    const updatedData = await Yuvalist.find();
-    res.status(200).json(updatedData);
+    res.status(200).json({ message: "Delete Successfully" });
   }
 });
 
 router.patch("/update/:id", async (req, res) => {
   if (!errorCheck(req, res)) {
     await Yuvalist.updateOne({ _id: req.body.id }, { ...req.body });
-    const users = await Yuvalist.find();
-    res.json(users);
+    res.status(200).json({ message: "Updated Successfully" });
   }
 });
 

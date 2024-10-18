@@ -61,24 +61,45 @@ router.get("/list", async (req, res) => {
       res
         .status(200)
         .json({ total: totalItems, page, totalPages, data: users });
-    } else if (role === "MANAGER") {
+    } else if (role === "REGION_MANAGER") {
       const mangerRegion = await User.findById(id);
       if (mangerRegion?.region) {
         const MangerUsers = await User.find({
-          role: { $eq: role },
           region: { $eq: mangerRegion?.region },
         })
           .skip(offset)
           .limit(limit)
           .exec();
-        const managerTotalItem=await User.find({
-          role: { $eq: role },
+        const managerTotalItem = await User.find({
           region: { $eq: mangerRegion?.region },
-        }).countDocuments({})
+        }).countDocuments({});
         const totalPages = Math.ceil(managerTotalItem / limit);
-        res
-          .status(200)
-          .json({ total: managerTotalItem, page, totalPages, data: MangerUsers });
+        res.status(200).json({
+          total: managerTotalItem,
+          page,
+          totalPages,
+          data: MangerUsers,
+        });
+      }
+    } else if (role === "SAMAJ_MANAGER") {
+      const mangerSamaj = await User.findById(id);
+      if (mangerSamaj?.localSamaj) {
+        const MangerUsers = await User.find({
+          localSamaj: { $eq: mangerSamaj?.localSamaj },
+        })
+          .skip(offset)
+          .limit(limit)
+          .exec();
+        const managerTotalItem = await User.find({
+          localSamaj: { $eq: mangerSamaj?.localSamaj },
+        }).countDocuments({});
+        const totalPages = Math.ceil(managerTotalItem / limit);
+        res.status(200).json({
+          total: managerTotalItem,
+          page,
+          totalPages,
+          data: MangerUsers,
+        });
       }
     }
   }
@@ -93,14 +114,25 @@ router.get("/requests", async (req, res) => {
         active: true,
       });
       res.status(200).json(users);
-    } else if (role === "MANAGER") {
+    } else if (role === "REGION_MANAGER") {
       const mangerRegion = await User.findById(id);
       if (mangerRegion?.region) {
         const MangerUsers = await User.find({
           allowed: { $eq: false },
           active: true,
-          role: { $eq: role },
+          // role: { $eq: role },
           region: { $eq: mangerRegion?.region },
+        });
+        res.status(200).json(MangerUsers);
+      }
+    } else if (role === "SAMAJ_MANAGER") {
+      const mangerSamaj = await User.findById(id);
+      if (mangerSamaj?.localSamaj) {
+        const MangerUsers = await User.find({
+          allowed: { $eq: false },
+          active: true,
+          // role: { $eq: role },
+          localSamaj: { $eq: mangerSamaj?.localSamaj },
         });
         res.status(200).json(MangerUsers);
       }
@@ -199,7 +231,6 @@ router.post("/signIn", async (req, res) => {
 
 router.patch("/update/:id", async (req, res) => {
   if (!errorCheck(req, res)) {
-    const { id, role } = req.user;
     const payload = { ...req.body };
     if (payload?.password) {
       payload.password = await bcrypt.hash(payload.password, 10);
@@ -208,24 +239,7 @@ router.patch("/update/:id", async (req, res) => {
       { _id: req.body.id },
       { ...payload, updatedAt: new Date(), updatedBy: req.body.id }
     );
-    if (role === "ADMIN") {
-      const users = await User.find({
-        allowed: { $eq: false },
-        active: true,
-      });
-      res.status(200).json(users);
-    } else if (role === "MANAGER") {
-      const mangerRegion = await User.findById(id);
-      if (mangerRegion?.region) {
-        const MangerUsers = await User.find({
-          allowed: { $eq: false },
-          active: true,
-          role: { $eq: role },
-          region: { $eq: mangerRegion?.region },
-        });
-        res.status(200).json(MangerUsers);
-      }
-    }
+    res.status(200).json({ message: "Updated Successfully" });
   }
 });
 
@@ -252,8 +266,6 @@ router.patch("/forgotPassword", async (req, res) => {
 
 router.patch("/approveRejectMany", async (req, res) => {
   if (!errorCheck(req, res)) {
-    const { id, role } = req.user;
-    await User.find({ _id: { $ne: req.body.ids } });
     await User.updateMany(
       { _id: { $in: req.body.ids } },
       {
@@ -265,23 +277,7 @@ router.patch("/approveRejectMany", async (req, res) => {
         },
       }
     );
-    if (role === "ADMIN") {
-      const users = await User.find({
-        allowed: false,
-        active: true,
-      });
-      res.status(200).json(users);
-    } else if (role === "MANAGER") {
-      const mangerRegion = await User.findById(id);
-      if (mangerRegion?.region) {
-        const MangerUsers = await User.find({
-          allowed: false,
-          active: true,
-          region: { $ne: mangerRegion?.region },
-        });
-        res.status(200).json(MangerUsers);
-      }
-    }
+    res.status(200).json({ message: "Updated Successfully" });
   }
 });
 
