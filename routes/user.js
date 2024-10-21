@@ -108,22 +108,45 @@ router.get("/list", async (req, res) => {
 router.get("/requests", async (req, res) => {
   if (!errorCheck(req, res)) {
     const { id, role } = req.user;
+    const page = parseInt(req.query.page, 10) || 1;
+    const limit = parseInt(req.query.limit, 10) || 10;
+    const offset = (page - 1) * limit;
     if (role === "ADMIN") {
       const users = await User.find({
         allowed: { $eq: false },
         active: true,
-      });
-      res.status(200).json(users);
+      })
+        .skip(offset)
+        .limit(limit)
+        .exec();
+      const totalItems = await User.countDocuments({});
+      const totalPages = Math.ceil(totalItems / limit);
+      res
+        .status(200)
+        .json({ total: totalItems, page, totalPages, data: users });
     } else if (role === "REGION_MANAGER") {
       const mangerRegion = await User.findById(id);
       if (mangerRegion?.region) {
         const MangerUsers = await User.find({
           allowed: { $eq: false },
           active: true,
-          // role: { $eq: role },
           region: { $eq: mangerRegion?.region },
+        })
+          .skip(offset)
+          .limit(limit)
+          .exec();
+        const managerTotalItem = await User.find({
+          allowed: { $eq: false },
+          active: true,
+          region: { $eq: mangerRegion?.region },
+        }).countDocuments({});
+        const totalPages = Math.ceil(managerTotalItem / limit);
+        res.status(200).json({
+          total: managerTotalItem,
+          page,
+          totalPages,
+          data: MangerUsers,
         });
-        res.status(200).json(MangerUsers);
       }
     } else if (role === "SAMAJ_MANAGER") {
       const mangerSamaj = await User.findById(id);
@@ -131,10 +154,23 @@ router.get("/requests", async (req, res) => {
         const MangerUsers = await User.find({
           allowed: { $eq: false },
           active: true,
-          // role: { $eq: role },
           localSamaj: { $eq: mangerSamaj?.localSamaj },
+        })
+          .skip(offset)
+          .limit(limit)
+          .exec();
+        const managerTotalItem = await User.find({
+          allowed: { $eq: false },
+          active: true,
+          localSamaj: { $eq: mangerSamaj?.localSamaj },
+        }).countDocuments({});
+        const totalPages = Math.ceil(managerTotalItem / limit);
+        res.status(200).json({
+          total: managerTotalItem,
+          page,
+          totalPages,
+          data: MangerUsers,
         });
-        res.status(200).json(MangerUsers);
       }
     }
   }
