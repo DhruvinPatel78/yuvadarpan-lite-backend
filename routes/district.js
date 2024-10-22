@@ -51,8 +51,19 @@ router.use(verifyToken);
 
 //  Get all districts
 router.get("/list", async (req, res) => {
-  const Districts = await District.find({ active: { $eq: true } });
-  res.json(Districts);
+  const page = parseInt(req.query.page, 10) || 1;
+  const limit = parseInt(req.query.limit, 10) || 10;
+  const offset = (page - 1) * limit;
+  const Districts = await District.find().skip(offset).limit(limit).exec();
+  const totalItems = await District.countDocuments({});
+  const totalPages = Math.ceil(totalItems / limit);
+  res
+    .status(200)
+    .json({ total: totalItems, page, totalPages, data: Districts });
+});
+router.get("/get-all-list", async (req, res) => {
+  const Districts = await District.find();
+  res.status(200).json(Districts);
 });
 
 //  Get districts by region id
@@ -60,9 +71,8 @@ router.get("/list/:id", async (req, res) => {
   const { id } = req.params;
   const DistrictData = await District.find({
     region_id: { $eq: id },
-    active: { $eq: true },
   });
-  res.json(DistrictData);
+  res.status(200).json(DistrictData);
 });
 
 //  Get districts by state id
@@ -70,9 +80,8 @@ router.get("/listByState/:id", async (req, res) => {
   const { id } = req.params;
   const RegionData = await District.find({
     state_id: { $eq: id },
-    active: { $eq: true },
   });
-  res.json(RegionData);
+  res.status(200).json(RegionData);
 });
 
 //  Add new district
@@ -88,7 +97,7 @@ router.post("/add", async (req, res) => {
       createdBy: req.user.id,
       updatedBy: null,
     });
-    res.send(dbDistrict);
+    res.status(200).json(dbDistrict);
   }
 });
 
@@ -96,9 +105,8 @@ router.post("/add", async (req, res) => {
 router.delete("/delete", async (req, res) => {
   if (!errorCheck(req, res)) {
     const data = req.body;
-    await District.deleteMany({ id: { $in: data?.districts  } });
-    const dbState = await District.find();
-    res.send(dbState);
+    await District.deleteMany({ id: { $in: data?.districts } });
+    res.status(200).json({ message: "Delete Successfully" });
   }
 });
 
@@ -107,9 +115,8 @@ router.get("/getInfo/:id", async (req, res) => {
   const { id } = req.params;
   const DistrictData = await District.find({
     id: { $eq: id },
-    active: { $eq: true },
   });
-  res.json(DistrictData);
+  res.status(200).json(DistrictData);
 });
 
 module.exports = router;

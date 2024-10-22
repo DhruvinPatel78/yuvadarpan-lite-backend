@@ -51,8 +51,17 @@ router.use(verifyToken);
 
 // Get all cities
 router.get("/list", async (req, res) => {
-  const Cities = await City.find({ active: { $eq: true } });
-  res.json(Cities);
+  const page = parseInt(req.query.page, 10) || 1;
+  const limit = parseInt(req.query.limit, 10) || 10;
+  const offset = (page - 1) * limit;
+  const Cities = await City.find().skip(offset).limit(limit).exec();
+  const totalItems = await City.countDocuments({});
+  const totalPages = Math.ceil(totalItems / limit);
+  res.status(200).json({ total: totalItems, page, totalPages, data: Cities });
+});
+router.get("/get-all-list", async (req, res) => {
+  const Cities = await City.find();
+  res.status(200).json(Cities);
 });
 
 // Get cities by district id
@@ -60,9 +69,8 @@ router.get("/list/:id", async (req, res) => {
   const { id } = req.params;
   const CityData = await City.find({
     district_id: { $eq: id },
-    active: { $eq: true },
   });
-  res.json(CityData);
+  res.status(200).json(CityData);
 });
 
 // Get cities by region id
@@ -70,9 +78,8 @@ router.get("/listByRegion/:id", async (req, res) => {
   const { id } = req.params;
   const CityData = await City.find({
     region_id: { $eq: id },
-    active: { $eq: true },
   });
-  res.json(CityData);
+  res.status(200).json(CityData);
 });
 
 // Add new city
@@ -88,7 +95,7 @@ router.post("/add", async (req, res) => {
       createdBy: req.user.id,
       updatedBy: null,
     });
-    res.send(dbCity);
+    res.status(200).send(dbCity);
   }
 });
 
@@ -97,8 +104,7 @@ router.delete("/delete", async (req, res) => {
   if (!errorCheck(req, res)) {
     const data = req.body;
     await City.deleteMany({ id: { $in: data.cities } });
-    const dbCity = await City.find();
-    res.send(dbCity);
+    res.status(200).json({ message: "Delete Successfully" });
   }
 });
 
@@ -106,9 +112,8 @@ router.get("/getInfo/:id", async (req, res) => {
   const { id } = req.params;
   const CityData = await City.find({
     id: { $eq: id },
-    active: { $eq: true },
   });
-  res.json(CityData);
+  res.status(200).json(CityData);
 });
 
 module.exports = router;

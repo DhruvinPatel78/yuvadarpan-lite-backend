@@ -51,8 +51,17 @@ router.use(verifyToken);
 
 // Get all region
 router.get("/list", async (req, res) => {
-  const Regions = await Region.find({ active: { $eq: true } });
-  res.json(Regions);
+  const page = parseInt(req.query.page, 10) || 1;
+  const limit = parseInt(req.query.limit, 10) || 10;
+  const offset = (page - 1) * limit;
+  const Regions = await Region.find().skip(offset).limit(limit).exec();
+  const totalItems = await Region.countDocuments({});
+  const totalPages = Math.ceil(totalItems / limit);
+  res.status(200).json({ total: totalItems, page, totalPages, data: Regions });
+});
+router.get("/get-all-list", async (req, res) => {
+  const Regions = await Region.find();
+  res.status(200).json(Regions);
 });
 
 // Get all regions by country id
@@ -60,9 +69,8 @@ router.get("/listByCountry/:id", async (req, res) => {
   const { id } = req.params;
   const RegionData = await Region.find({
     country_id: { $eq: id },
-    active: { $eq: true },
   });
-  res.json(RegionData);
+  res.status(200).json(RegionData);
 });
 
 // Get all regions by state id
@@ -70,9 +78,8 @@ router.get("/list/:id", async (req, res) => {
   const { id } = req.params;
   const RegionData = await Region.find({
     state_id: { $eq: id },
-    active: { $eq: true },
   });
-  res.json(RegionData);
+  res.status(200).json(RegionData);
 });
 
 // Add new region
@@ -88,7 +95,7 @@ router.post("/add", async (req, res) => {
       createdBy: req.user.id,
       updatedBy: null,
     });
-    res.send(dbRegion);
+    res.status(200).json(dbRegion);
   }
 });
 
@@ -97,8 +104,7 @@ router.delete("/delete", async (req, res) => {
   if (!errorCheck(req, res)) {
     const data = req.body;
     await Region.deleteMany({ id: { $in: data.regions } });
-    const dbState = await Region.find();
-    res.send(dbState);
+    res.status(200).json({ message: "Delete Successfully" });
   }
 });
 
@@ -107,9 +113,8 @@ router.get("/getInfo/:id", async (req, res) => {
   const { id } = req.params;
   const RegionData = await Region.find({
     id: { $eq: id },
-    active: { $eq: true },
   });
-  res.json(RegionData);
+  res.status(200).json(RegionData);
 });
 
 module.exports = router;

@@ -51,8 +51,19 @@ router.use(verifyToken);
 
 // Get all countries
 router.get("/list", async (req, res) => {
+  const page = parseInt(req.query.page, 10) || 1;
+  const limit = parseInt(req.query.limit, 10) || 10;
+  const offset = (page - 1) * limit;
+  const Countries = await Country.find().skip(offset).limit(limit).exec();
+  const totalItems = await Country.countDocuments({});
+  const totalPages = Math.ceil(totalItems / limit);
+  res
+    .status(200)
+    .json({ total: totalItems, page, totalPages, data: Countries });
+});
+router.get("/get-all-list", async (req, res) => {
   const Countries = await Country.find();
-  res.json(Countries);
+  res.status(200).json(Countries);
 });
 
 // Add new country
@@ -68,7 +79,7 @@ router.post("/add", async (req, res) => {
       createdBy: req.user.id,
       updatedBy: null,
     });
-    res.send(dbCountry);
+    res.status(200).json(dbCountry);
   }
 });
 
@@ -77,8 +88,7 @@ router.delete("/delete", async (req, res) => {
   if (!errorCheck(req, res)) {
     const data = req.body;
     await Country.deleteMany({ id: { $in: data?.countries } });
-    const dbCountry = await Country.find();
-    res.json(dbCountry);
+    res.status(200).json({ message: "Delete Successfully" });
   }
 });
 
@@ -87,9 +97,8 @@ router.get("/getInfo/:id", async (req, res) => {
   const { id } = req.params;
   const Countries = await Country.find({
     id: { $eq: id },
-    active: { $eq: true },
   });
-  res.json(Countries);
+  res.status(200).json(Countries);
 });
 
 router.patch("/update/:id", async (req, res) => {
@@ -100,8 +109,7 @@ router.patch("/update/:id", async (req, res) => {
       { id: id },
       { ...payload, updatedAt: new Date(), updatedBy: req?.user.id }
     );
-    const users = await Country.find();
-    res.json(users);
+    res.status(200).json({ message: "Updated Successfully" });
   }
 });
 
