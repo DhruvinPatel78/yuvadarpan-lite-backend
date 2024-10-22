@@ -51,8 +51,17 @@ router.use(verifyToken);
 
 // Get all states
 router.get("/list", async (req, res) => {
-  const States = await State.find({ active: { $eq: true } });
-  res.json(States);
+  const page = parseInt(req.query.page, 10) || 1;
+  const limit = parseInt(req.query.limit, 10) || 10;
+  const offset = (page - 1) * limit;
+  const States = await State.find().skip(offset).limit(limit).exec();
+  const totalItems = await State.countDocuments({});
+  const totalPages = Math.ceil(totalItems / limit);
+  res.status(200).json({ total: totalItems, page, totalPages, data: States });
+});
+router.get("/get-all-list", async (req, res) => {
+  const States = await State.find();
+  res.status(200).json(States);
 });
 
 // Get states by country id
@@ -60,9 +69,8 @@ router.get("/list/:id", async (req, res) => {
   const { id } = req.params;
   const States = await State.find({
     country_id: { $eq: id },
-    active: { $eq: true },
   });
-  res.json(States);
+  res.status(200).json(States);
 });
 
 // Add new state
@@ -78,7 +86,7 @@ router.post("/add", async (req, res) => {
       createdBy: req.user.id,
       updatedBy: null,
     });
-    res.send(dbState);
+    res.status(200).send(dbState);
   }
 });
 
@@ -87,8 +95,7 @@ router.delete("/delete", async (req, res) => {
   if (!errorCheck(req, res)) {
     const data = req.body;
     await State.deleteMany({ id: { $in: data.states } });
-    const dbState = await State.find();
-    res.send(dbState);
+    res.status(200).json({ message: "Delete Successfully" });
   }
 });
 
@@ -97,9 +104,8 @@ router.get("/getInfo/:id", async (req, res) => {
   const { id } = req.params;
   const StateData = await State.find({
     id: { $eq: id },
-    active: { $eq: true },
   });
-  res.json(StateData);
+  res.status(200).json(StateData);
 });
 
 module.exports = router;

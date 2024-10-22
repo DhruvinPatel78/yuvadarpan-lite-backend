@@ -51,8 +51,17 @@ router.use(verifyToken);
 
 // Get all countries
 router.get("/list", async (req, res) => {
-  const Countries = await Surname.find({ active: { $eq: true } });
-  res.json(Countries);
+  const page = parseInt(req.query.page, 10) || 1;
+  const limit = parseInt(req.query.limit, 10) || 10;
+  const offset = (page - 1) * limit;
+  const Surnames = await Surname.find().skip(offset).limit(limit).exec();
+  const totalItems = await Surname.countDocuments({});
+  const totalPages = Math.ceil(totalItems / limit);
+  res.status(200).json({ total: totalItems, page, totalPages, data: Surnames });
+});
+router.get("/get-all-list", async (req, res) => {
+  const Surnames = await Surname.find();
+  res.status(200).json(Surnames);
 });
 
 // Add new country
@@ -68,7 +77,7 @@ router.post("/add", async (req, res) => {
       createdBy: req.user.id,
       updatedBy: null,
     });
-    res.send(dbSurname);
+    res.status(200).send(dbSurname);
   }
 });
 
@@ -77,8 +86,7 @@ router.delete("/delete", async (req, res) => {
   if (!errorCheck(req, res)) {
     const data = req.body;
     await Surname.deleteMany({ id: { $in: data?.surnames } });
-    const dbSurname = await Surname.find();
-    res.send(dbSurname);
+    res.status(200).json({ message: "Delete Successfully" });
   }
 });
 
@@ -87,9 +95,8 @@ router.get("/getInfo/:id", async (req, res) => {
   const { id } = req.params;
   const Countries = await Surname.find({
     id: { $eq: id },
-    active: { $eq: true },
   });
-  res.json(Countries);
+  res.status(200).json(Countries);
 });
 
 module.exports = router;

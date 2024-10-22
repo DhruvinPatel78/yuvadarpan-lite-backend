@@ -51,8 +51,17 @@ router.use(verifyToken);
 
 // Get all samaj
 router.get("/list", async (req, res) => {
-  const Samajs = await Samaj.find({ active: { $eq: true } });
-  res.json(Samajs);
+  const page = parseInt(req.query.page, 10) || 1;
+  const limit = parseInt(req.query.limit, 10) || 10;
+  const offset = (page - 1) * limit;
+  const Samajs = await Samaj.find().skip(offset).limit(limit).exec();
+  const totalItems = await Samaj.countDocuments({});
+  const totalPages = Math.ceil(totalItems / limit);
+  res.status(200).json({ total: totalItems, page, totalPages, data: Samajs });
+});
+router.get("/get-all-list", async (req, res) => {
+  const Samajs = await Samaj.find();
+  res.status(200).json(Samajs);
 });
 
 // Get samaj by city id
@@ -60,9 +69,8 @@ router.get("/list/:id", async (req, res) => {
   const { id } = req.params;
   const SamajData = await Samaj.find({
     city_id: { $eq: id },
-    active: { $eq: true },
   });
-  res.json(SamajData);
+  res.status(200).json(SamajData);
 });
 
 // Get samaj by district id
@@ -70,9 +78,8 @@ router.get("/listByDistrict/:id", async (req, res) => {
   const { id } = req.params;
   const SamajData = await Samaj.find({
     district_id: { $eq: id },
-    active: { $eq: true },
   });
-  res.json(SamajData);
+  res.status(200).json(SamajData);
 });
 
 // Get samaj by region id
@@ -80,9 +87,8 @@ router.get("/listByRegion/:id", async (req, res) => {
   const { id } = req.params;
   const SamajData = await Samaj.find({
     region_id: { $eq: id },
-    active: { $eq: true },
   });
-  res.json(SamajData);
+  res.status(200).json(SamajData);
 });
 
 //  Add new samaj
@@ -98,7 +104,7 @@ router.post("/add", async (req, res) => {
       createdBy: req.user.id,
       updatedBy: null,
     });
-    res.send(dbSamaj);
+    res.status(200).send(dbSamaj);
   }
 });
 
@@ -107,8 +113,7 @@ router.delete("/delete", async (req, res) => {
   if (!errorCheck(req, res)) {
     const data = req.body;
     await Samaj.deleteMany({ id: { $in: data.samaj } });
-    const dbSamaj = await Samaj.find();
-    res.send(dbSamaj);
+    res.status(200).json({ message: "Delete Successfully" });
   }
 });
 
@@ -117,9 +122,8 @@ router.get("/getInfo/:id", async (req, res) => {
   const { id } = req.params;
   const SamajData = await Samaj.find({
     id: { $eq: id },
-    active: { $eq: true },
   });
-  res.json(SamajData);
+  res.status(200).json(SamajData);
 });
 
 module.exports = router;
