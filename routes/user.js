@@ -119,7 +119,10 @@ router.get("/requests", async (req, res) => {
         .skip(offset)
         .limit(limit)
         .exec();
-      const totalItems = await User.countDocuments({});
+      const totalItems = await User.find({
+        allowed: { $eq: false },
+        active: true,
+      }).countDocuments({});
       const totalPages = Math.ceil(totalItems / limit);
       res
         .status(200)
