@@ -5,6 +5,7 @@ const jwt = require("jsonwebtoken");
 const User = require("../models/user");
 const OtpGenerator = require("otp-generator");
 const OTP = require("../models/OTP");
+const Region = require("../models/region");
 
 const verifyToken = (req, res, next) => {
   const authHeader = req.headers.authorization;
@@ -108,13 +109,43 @@ router.get("/list", async (req, res) => {
 router.get("/requests", async (req, res) => {
   if (!errorCheck(req, res)) {
     const { id, role } = req.user;
+    const { lastName = [], state = [], region = [], samaj = [] } = req.query;
     const page = parseInt(req.query.page, 10) || 1;
     const limit = parseInt(req.query.limit, 10) || 10;
     const offset = (page - 1) * limit;
+    const LastName =
+      lastName?.length > 0
+        ? {
+            lastName: { $in: lastName },
+          }
+        : {};
+
+    const RegionData = await Region.findOne({
+      state_id: { $in: state },
+    });
+    const State = RegionData
+      ? {
+          region: { $eq: RegionData?.id },
+        }
+      : {};
+    const CurrentRegion = region?.length > 0
+      ? {
+          region: { $in: region },
+        }
+      : {};
+    const CurrentSamaj = samaj?.length > 0
+      ? {
+          localSamaj: { $in: samaj },
+        }
+      : {};
     if (role === "ADMIN") {
       const users = await User.find({
         allowed: { $eq: false },
         active: true,
+        ...LastName,
+        ...State,
+        ...CurrentRegion,
+        ...CurrentSamaj,
       })
         .skip(offset)
         .limit(limit)
@@ -122,6 +153,10 @@ router.get("/requests", async (req, res) => {
       const totalItems = await User.find({
         allowed: { $eq: false },
         active: true,
+        ...LastName,
+        ...State,
+        ...CurrentRegion,
+        ...CurrentSamaj,
       }).countDocuments({});
       const totalPages = Math.ceil(totalItems / limit);
       res
@@ -134,6 +169,10 @@ router.get("/requests", async (req, res) => {
           allowed: { $eq: false },
           active: true,
           region: { $eq: mangerRegion?.region },
+          ...LastName,
+          ...State,
+          ...CurrentRegion,
+          ...CurrentSamaj,
         })
           .skip(offset)
           .limit(limit)
@@ -142,6 +181,10 @@ router.get("/requests", async (req, res) => {
           allowed: { $eq: false },
           active: true,
           region: { $eq: mangerRegion?.region },
+          ...LastName,
+          ...State,
+          ...CurrentRegion,
+          ...CurrentSamaj,
         }).countDocuments({});
         const totalPages = Math.ceil(managerTotalItem / limit);
         res.status(200).json({
@@ -158,6 +201,10 @@ router.get("/requests", async (req, res) => {
           allowed: { $eq: false },
           active: true,
           localSamaj: { $eq: mangerSamaj?.localSamaj },
+          ...LastName,
+          ...State,
+          ...CurrentRegion,
+          ...CurrentSamaj,
         })
           .skip(offset)
           .limit(limit)
@@ -166,6 +213,10 @@ router.get("/requests", async (req, res) => {
           allowed: { $eq: false },
           active: true,
           localSamaj: { $eq: mangerSamaj?.localSamaj },
+          ...LastName,
+          ...State,
+          ...CurrentRegion,
+          ...CurrentSamaj,
         }).countDocuments({});
         const totalPages = Math.ceil(managerTotalItem / limit);
         res.status(200).json({
@@ -279,6 +330,13 @@ router.patch("/update/:id", async (req, res) => {
       { ...payload, updatedAt: new Date(), updatedBy: req.body.id }
     );
     res.status(200).json({ message: "Updated Successfully" });
+  }
+});
+router.delete("/delete", async (req, res) => {
+  if (!errorCheck(req, res)) {
+    const data = req.body;
+    await User.deleteMany({ id: { $in: data.users } });
+    res.status(200).json({ message: "Delete Successfully" });
   }
 });
 
