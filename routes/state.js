@@ -108,4 +108,16 @@ router.get("/getInfo/:id", async (req, res) => {
   res.status(200).json(StateData);
 });
 
+router.patch("/update/:id", async (req, res) => {
+  if (!errorCheck(req, res)) {
+    const { id } = req.params;
+    const payload = { ...req.body };
+    await State.updateOne(
+        { id: id },
+        { ...payload, updatedAt: new Date(), updatedBy: req?.user.id }
+    );
+    res.status(200).json({ message: "Updated Successfully" });
+  }
+});
+
 module.exports = router;

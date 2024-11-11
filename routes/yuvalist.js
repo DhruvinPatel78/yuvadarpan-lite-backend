@@ -118,10 +118,18 @@ router.get("/citylist", async (req, res) => {
 });
 
 router.post("/addYuvaList", async (req, res) => {
-  const yuvaList = req.body;
+  const data = req.body;
   const user = req.user;
   if (user.role === "ADMIN") {
-    const dbYuvaList = await Yuvalist.create(yuvaList);
+    const dbYuvaList = await Yuvalist.create({
+      ...data,
+      id: crypto.randomUUID().replace(/-/g, ""),
+      active: true,
+      createdAt: new Date(),
+      updatedAt: null,
+      createdBy: req.user.id,
+      updatedBy: null,
+    });
     res.send(dbYuvaList);
   } else {
     res.status(403).send({ message: "only-admin-can-create-yuva" });
@@ -130,14 +138,14 @@ router.post("/addYuvaList", async (req, res) => {
 
 router.delete("/:id", async (req, res) => {
   if (!errorCheck(req, res)) {
-    await Yuvalist.findByIdAndDelete(req.params.id);
+    await Yuvalist.deleteOne({id:{$in: req.params.id}});
     res.status(200).json({ message: "Delete Successfully" });
   }
 });
 
 router.patch("/update/:id", async (req, res) => {
   if (!errorCheck(req, res)) {
-    await Yuvalist.updateOne({ _id: req.body.id }, { ...req.body });
+    await Yuvalist.updateOne({ id: req.body.id }, { ...req.body });
     res.status(200).json({ message: "Updated Successfully" });
   }
 });
