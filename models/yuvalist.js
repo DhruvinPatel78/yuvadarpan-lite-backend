@@ -15,6 +15,10 @@ const profileSchema = new mongoose.Schema({
   awsId: String,
 });
 const yuvaListSchema = new mongoose.Schema({
+  id: {
+    type: String,
+    required: true,
+  },
   familyId: {
     type: String,
     required: true,
@@ -92,17 +96,17 @@ const yuvaListSchema = new mongoose.Schema({
     required: true,
   },
   profile: profileSchema,
-  active: Boolean,
   handicap: Boolean,
   manglik: { type: Boolean, default: false },
-  createdAt: Date,
-  updatedAt: Date,
-  createdBy: String,
   region: String,
   district: String,
   localSamaj: String,
-  updatedBy: String,
   handicapDetails: String,
+  active: Boolean,
+  createdAt: Date,
+  updatedAt: Date,
+  createdBy: String,
+  updatedBy: String,
 });
 
 const Yuvalist = mongoose.model("YuvaList", yuvaListSchema);
