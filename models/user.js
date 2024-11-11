@@ -51,6 +51,7 @@ const userSchema = new mongoose.Schema({
   createdAt: Date,
   updatedAt: Date,
   createdBy: String,
+  gender: String,
   updatedBy: String,
 });
 

@@ -51,9 +51,19 @@ router.use(verifyToken);
 
 // Get all countries
 router.get("/list", async (req, res) => {
-  const Natives = await Native.find();
-  res.json(Natives);
+  const page = parseInt(req.query.page, 10) || 1;
+  const limit = parseInt(req.query.limit, 10) || 10;
+  const offset = (page - 1) * limit;
+  const Natives = await Native.find().skip(offset).limit(limit).exec();
+  const totalItems = await Native.countDocuments({});
+  const totalPages = Math.ceil(totalItems / limit);
+  res.status(200).json({ total: totalItems, page, totalPages, data: Natives });
 });
+router.get("/get-all-list", async (req, res) => {
+  const Natives = await Native.find()
+  res.status(200).json(Natives);
+})
+
 
 // Add new country
 router.post("/add", async (req, res) => {
@@ -68,7 +78,7 @@ router.post("/add", async (req, res) => {
       createdBy: req.user.id,
       updatedBy: null,
     });
-    res.send(dbNative);
+    res.status(200).send(dbNative);
   }
 });
 
@@ -77,8 +87,7 @@ router.delete("/delete", async (req, res) => {
   if (!errorCheck(req, res)) {
     const data = req.body;
     await Native.deleteMany({ id: { $in: data?.natives } });
-    const dbNative = await Native.find();
-    res.json(dbNative);
+    res.status(200).json({ message: "Delete Successfully" });
   }
 });
 
@@ -89,7 +98,7 @@ router.get("/getInfo/:id", async (req, res) => {
     id: { $eq: id },
     active: { $eq: true },
   });
-  res.json(Natives);
+  res.status(200).json(Natives);
 });
 
 router.patch("/update/:id", async (req, res) => {
@@ -100,8 +109,7 @@ router.patch("/update/:id", async (req, res) => {
       { id: id },
       { ...payload, updatedAt: new Date(), updatedBy: req?.user.id }
     );
-    const users = await Native.find();
-    res.json(users);
+    res.status(200).json({ message: "Update Successfully" });
   }
 });
 
