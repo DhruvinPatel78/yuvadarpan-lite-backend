@@ -108,6 +108,7 @@ router.get("/getInfo/:id", async (req, res) => {
   res.status(200).json(StateData);
 });
 
+// Update state by state id
 router.patch("/update/:id", async (req, res) => {
   if (!errorCheck(req, res)) {
     const { id } = req.params;
