@@ -109,7 +109,17 @@ router.get("/list", async (req, res) => {
 router.get("/requests", async (req, res) => {
   if (!errorCheck(req, res)) {
     const { id, role } = req.user;
-    const { lastName = [], state = [], region = [], samaj = [] } = req.query;
+    const {
+      lastName = [],
+      state = [],
+      region = [],
+      samaj = [],
+      familyId,
+      firstName,
+      mobile,
+      email,
+      gender,
+    } = req.query;
     const page = parseInt(req.query.page, 10) || 1;
     const limit = parseInt(req.query.limit, 10) || 10;
     const offset = (page - 1) * limit;
@@ -119,6 +129,31 @@ router.get("/requests", async (req, res) => {
             lastName: { $in: lastName },
           }
         : {};
+    const FamilyId = familyId
+      ? {
+          familyId: { $eq: familyId },
+        }
+      : {};
+    const FirstName = firstName
+      ? {
+          firstName: { $eq: firstName },
+        }
+      : {};
+    const Mobile = mobile
+      ? {
+          mobile: { $eq: mobile },
+        }
+      : {};
+    const Email = email
+      ? {
+          email: { $eq: email },
+        }
+      : {};
+    const Gender = gender
+      ? {
+          gender: { $eq: gender },
+        }
+      : {};
 
     const RegionData = await Region.findOne({
       state_id: { $in: state },
@@ -128,16 +163,18 @@ router.get("/requests", async (req, res) => {
           region: { $eq: RegionData?.id },
         }
       : {};
-    const CurrentRegion = region?.length > 0
-      ? {
-          region: { $in: region },
-        }
-      : {};
-    const CurrentSamaj = samaj?.length > 0
-      ? {
-          localSamaj: { $in: samaj },
-        }
-      : {};
+    const CurrentRegion =
+      region?.length > 0
+        ? {
+            region: { $in: region },
+          }
+        : {};
+    const CurrentSamaj =
+      samaj?.length > 0
+        ? {
+            localSamaj: { $in: samaj },
+          }
+        : {};
     if (role === "ADMIN") {
       const users = await User.find({
         allowed: { $eq: false },
@@ -146,6 +183,11 @@ router.get("/requests", async (req, res) => {
         ...State,
         ...CurrentRegion,
         ...CurrentSamaj,
+        ...FamilyId,
+        ...FirstName,
+        ...Mobile,
+        ...Gender,
+        ...Email,
       })
         .skip(offset)
         .limit(limit)
@@ -157,6 +199,11 @@ router.get("/requests", async (req, res) => {
         ...State,
         ...CurrentRegion,
         ...CurrentSamaj,
+        ...FamilyId,
+        ...FirstName,
+        ...Mobile,
+        ...Gender,
+        ...Email,
       }).countDocuments({});
       const totalPages = Math.ceil(totalItems / limit);
       res
@@ -173,6 +220,11 @@ router.get("/requests", async (req, res) => {
           ...State,
           ...CurrentRegion,
           ...CurrentSamaj,
+          ...FamilyId,
+          ...FirstName,
+          ...Mobile,
+          ...Gender,
+          ...Email,
         })
           .skip(offset)
           .limit(limit)
@@ -185,6 +237,11 @@ router.get("/requests", async (req, res) => {
           ...State,
           ...CurrentRegion,
           ...CurrentSamaj,
+          ...FamilyId,
+          ...FirstName,
+          ...Mobile,
+          ...Gender,
+          ...Email,
         }).countDocuments({});
         const totalPages = Math.ceil(managerTotalItem / limit);
         res.status(200).json({
@@ -205,6 +262,11 @@ router.get("/requests", async (req, res) => {
           ...State,
           ...CurrentRegion,
           ...CurrentSamaj,
+          ...FamilyId,
+          ...FirstName,
+          ...Mobile,
+          ...Gender,
+          ...Email,
         })
           .skip(offset)
           .limit(limit)
@@ -217,6 +279,11 @@ router.get("/requests", async (req, res) => {
           ...State,
           ...CurrentRegion,
           ...CurrentSamaj,
+          ...FamilyId,
+          ...FirstName,
+          ...Mobile,
+          ...Gender,
+          ...Email,
         }).countDocuments({});
         const totalPages = Math.ceil(managerTotalItem / limit);
         res.status(200).json({
