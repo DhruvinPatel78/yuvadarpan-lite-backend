@@ -49,7 +49,7 @@ const errorCheck = (req, res) => {
 
 router.use(verifyToken);
 
-// Get all countries
+// Get all Surname
 router.get("/list", async (req, res) => {
   const page = parseInt(req.query.page, 10) || 1;
   const limit = parseInt(req.query.limit, 10) || 10;
@@ -64,7 +64,7 @@ router.get("/get-all-list", async (req, res) => {
   res.status(200).json(Surnames);
 });
 
-// Add new country
+// Add new Surname
 router.post("/add", async (req, res) => {
   if (!errorCheck(req, res)) {
     const data = req.body;
@@ -81,7 +81,7 @@ router.post("/add", async (req, res) => {
   }
 });
 
-// Delete countries by country ids
+// Delete Surname by Surname ids
 router.delete("/delete", async (req, res) => {
   if (!errorCheck(req, res)) {
     const data = req.body;
@@ -90,13 +90,26 @@ router.delete("/delete", async (req, res) => {
   }
 });
 
-// Get country info by country id
+// Get Surname info by Surname id
 router.get("/getInfo/:id", async (req, res) => {
   const { id } = req.params;
   const Countries = await Surname.find({
     id: { $eq: id },
   });
   res.status(200).json(Countries);
+});
+
+// Update Surname by Surname id
+router.patch("/update/:id", async (req, res) => {
+  if (!errorCheck(req, res)) {
+    const { id } = req.params;
+    const payload = { ...req.body };
+    await Surname.updateOne(
+        { id: id },
+        { ...payload, updatedAt: new Date(), updatedBy: req?.user.id }
+    );
+    res.status(200).json({ message: "Updated Successfully" });
+  }
 });
 
 module.exports = router;
