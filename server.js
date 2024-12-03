@@ -15,6 +15,7 @@ const districtRouter = require("./routes/district");
 const cityRouter = require("./routes/city");
 const samajRouter = require("./routes/samaj");
 const surnameRouter = require("./routes/surname");
+const roleRouter = require("./routes/role");
 const { specs, swaggerUi } = require("./swagger");
 
 const app = express();
@@ -64,6 +65,7 @@ app.use("/district", districtRouter);
 app.use("/city", cityRouter);
 app.use("/samaj", samajRouter);
 app.use("/surname", surnameRouter);
+app.use("/role", roleRouter);
 
 app.listen(PORT, () => {
   console.log(`Server is up and running on ${PORT}`);
