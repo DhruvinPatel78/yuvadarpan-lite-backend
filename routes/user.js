@@ -119,10 +119,17 @@ router.get("/requests", async (req, res) => {
       mobile,
       email,
       gender,
+        roles = [],
     } = req.query;
     const page = parseInt(req.query.page, 10) || 1;
     const limit = parseInt(req.query.limit, 10) || 10;
     const offset = (page - 1) * limit;
+    const Roles =
+      roles?.length > 0
+        ? {
+            role: { $in: roles },
+          }
+        : {};
     const LastName =
       lastName?.length > 0
         ? {
@@ -188,6 +195,7 @@ router.get("/requests", async (req, res) => {
         ...Mobile,
         ...Gender,
         ...Email,
+        ...Roles,
       })
         .skip(offset)
         .limit(limit)
@@ -204,6 +212,7 @@ router.get("/requests", async (req, res) => {
         ...Mobile,
         ...Gender,
         ...Email,
+        ...Roles,
       }).countDocuments({});
       const totalPages = Math.ceil(totalItems / limit);
       res
@@ -225,6 +234,7 @@ router.get("/requests", async (req, res) => {
           ...Mobile,
           ...Gender,
           ...Email,
+          ...Roles,
         })
           .skip(offset)
           .limit(limit)
@@ -242,6 +252,7 @@ router.get("/requests", async (req, res) => {
           ...Mobile,
           ...Gender,
           ...Email,
+          ...Roles,
         }).countDocuments({});
         const totalPages = Math.ceil(managerTotalItem / limit);
         res.status(200).json({
@@ -267,6 +278,7 @@ router.get("/requests", async (req, res) => {
           ...Mobile,
           ...Gender,
           ...Email,
+          ...Roles,
         })
           .skip(offset)
           .limit(limit)
@@ -284,6 +296,7 @@ router.get("/requests", async (req, res) => {
           ...Mobile,
           ...Gender,
           ...Email,
+          ...Roles,
         }).countDocuments({});
         const totalPages = Math.ceil(managerTotalItem / limit);
         res.status(200).json({
@@ -386,6 +399,22 @@ router.post("/signIn", async (req, res) => {
   }
 });
 
+router.post("/add", async (req, res) => {
+  const user = req.body;
+  user.password = await bcrypt.hash(user.password, 10);
+  const dbUser = await User.create({
+    ...user,
+    id: crypto.randomUUID().replace(/-/g, ""),
+    createdAt: new Date(),
+    updatedAt: null,
+    createdBy: null,
+    updatedBy: null,
+    active: true,
+    allowed: false,
+  });
+  res.send(dbUser);
+});
+
 router.patch("/update/:id", async (req, res) => {
   if (!errorCheck(req, res)) {
     const payload = { ...req.body };
@@ -399,6 +428,7 @@ router.patch("/update/:id", async (req, res) => {
     res.status(200).json({ message: "Updated Successfully" });
   }
 });
+
 router.delete("/delete", async (req, res) => {
   if (!errorCheck(req, res)) {
     const data = req.body;
