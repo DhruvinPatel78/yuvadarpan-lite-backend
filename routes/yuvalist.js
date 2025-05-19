@@ -3,6 +3,7 @@ const jwt = require("jsonwebtoken");
 const router = express.Router();
 const Yuvalist = require("../models/yuvalist");
 const User = require("../models/user");
+const Region = require("../models/region");
 
 const verifyToken = (req, res, next) => {
   const authHeader = req.headers.authorization;
@@ -147,6 +148,210 @@ router.patch("/update/:id", async (req, res) => {
   if (!errorCheck(req, res)) {
     await Yuvalist.updateOne({ id: req.body.id }, { ...req.body });
     res.status(200).json({ message: "Updated Successfully" });
+  }
+});
+
+router.get("/requests", async (req, res) => {
+  if (!errorCheck(req, res)) {
+    const { id, role } = req.user;
+    const {
+      lastName = [],
+      state = [],
+      region = [],
+      samaj = [],
+      familyId,
+      firstName,
+      mobile,
+      email,
+      gender,
+      roles = [],
+    } = req.query;
+    const page = parseInt(req.query.page, 10) || 1;
+    const limit = parseInt(req.query.limit, 10) || 10;
+    const offset = (page - 1) * limit;
+    const Roles =
+        roles?.length > 0
+            ? {
+              role: { $in: roles },
+            }
+            : {};
+    const LastName =
+        lastName?.length > 0
+            ? {
+              lastName: { $in: lastName },
+            }
+            : {};
+    const FamilyId = familyId
+        ? {
+          familyId: { $eq: familyId },
+        }
+        : {};
+    const FirstName = firstName
+        ? {
+          firstName: { $in: firstName },
+        }
+        : {};
+    const Mobile = mobile
+        ? {
+          mobile: { $eq: mobile },
+        }
+        : {};
+    const Email = email
+        ? {
+          email: { $eq: email },
+        }
+        : {};
+    const Gender = gender
+        ? {
+          gender: { $eq: gender },
+        }
+        : {};
+
+    const RegionData = await Region.findOne({
+      state_id: { $in: state },
+    });
+    const State = RegionData
+        ? {
+          region: { $eq: RegionData?.id },
+        }
+        : {};
+    const CurrentRegion =
+        region?.length > 0
+            ? {
+              region: { $in: region },
+            }
+            : {};
+    const CurrentSamaj =
+        samaj?.length > 0
+            ? {
+              localSamaj: { $in: samaj },
+            }
+            : {};
+    if (role === "ADMIN") {
+      const users = await Yuvalist.find({
+        allowed: { $eq: false },
+        active: true,
+        ...LastName,
+        ...State,
+        ...CurrentRegion,
+        ...CurrentSamaj,
+        ...FamilyId,
+        ...FirstName,
+        ...Mobile,
+        ...Gender,
+        ...Email,
+        ...Roles,
+      })
+          .skip(offset)
+          .limit(limit)
+          .exec();
+      const totalItems = await Yuvalist.find({
+        allowed: { $eq: false },
+        active: true,
+        ...LastName,
+        ...State,
+        ...CurrentRegion,
+        ...CurrentSamaj,
+        ...FamilyId,
+        ...FirstName,
+        ...Mobile,
+        ...Gender,
+        ...Email,
+        ...Roles,
+      }).countDocuments({});
+      const totalPages = Math.ceil(totalItems / limit);
+      res
+          .status(200)
+          .json({ total: totalItems, page, totalPages, data: users });
+    } else if (role === "REGION_MANAGER") {
+      const mangerRegion = await User.findById(id);
+      if (mangerRegion?.region) {
+        const MangerUsers = await Yuvalist.find({
+          allowed: { $eq: false },
+          active: true,
+          region: { $eq: mangerRegion?.region },
+          ...LastName,
+          ...State,
+          ...CurrentRegion,
+          ...CurrentSamaj,
+          ...FamilyId,
+          ...FirstName,
+          ...Mobile,
+          ...Gender,
+          ...Email,
+          ...Roles,
+        })
+            .skip(offset)
+            .limit(limit)
+            .exec();
+        const managerTotalItem = await Yuvalist.find({
+          allowed: { $eq: false },
+          active: true,
+          region: { $eq: mangerRegion?.region },
+          ...LastName,
+          ...State,
+          ...CurrentRegion,
+          ...CurrentSamaj,
+          ...FamilyId,
+          ...FirstName,
+          ...Mobile,
+          ...Gender,
+          ...Email,
+          ...Roles,
+        }).countDocuments({});
+        const totalPages = Math.ceil(managerTotalItem / limit);
+        res.status(200).json({
+          total: managerTotalItem,
+          page,
+          totalPages,
+          data: MangerUsers,
+        });
+      }
+    } else if (role === "SAMAJ_MANAGER") {
+      const mangerSamaj = await User.findById(id);
+      if (mangerSamaj?.localSamaj) {
+        const MangerUsers = await Yuvalist.find({
+          allowed: { $eq: false },
+          active: true,
+          localSamaj: { $eq: mangerSamaj?.localSamaj },
+          ...LastName,
+          ...State,
+          ...CurrentRegion,
+          ...CurrentSamaj,
+          ...FamilyId,
+          ...FirstName,
+          ...Mobile,
+          ...Gender,
+          ...Email,
+          ...Roles,
+        })
+            .skip(offset)
+            .limit(limit)
+            .exec();
+        const managerTotalItem = await Yuvalist.find({
+          allowed: { $eq: false },
+          active: true,
+          localSamaj: { $eq: mangerSamaj?.localSamaj },
+          ...LastName,
+          ...State,
+          ...CurrentRegion,
+          ...CurrentSamaj,
+          ...FamilyId,
+          ...FirstName,
+          ...Mobile,
+          ...Gender,
+          ...Email,
+          ...Roles,
+        }).countDocuments({});
+        const totalPages = Math.ceil(managerTotalItem / limit);
+        res.status(200).json({
+          total: managerTotalItem,
+          page,
+          totalPages,
+          data: MangerUsers,
+        });
+      }
+    }
   }
 });
 
