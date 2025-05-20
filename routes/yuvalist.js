@@ -23,7 +23,7 @@ const verifyToken = (req, res, next) => {
             message: error.name,
           };
         }
-      }
+      },
     );
   } else {
     req.error = {
@@ -50,12 +50,61 @@ const errorCheck = (req, res) => {
 router.get("/list", async (req, res) => {
   if (!errorCheck(req, res)) {
     const { id, role } = req.user;
+    const {
+      lastName = [],
+      native = [],
+      familyId,
+      gender,
+      firmName,
+    } = req.query;
     const page = parseInt(req.query.page, 10) || 1;
     const limit = parseInt(req.query.limit, 10) || 10;
     const offset = (page - 1) * limit;
+    const FirstName =
+      lastName?.length > 0
+        ? {
+            lastName: { $in: lastName },
+          }
+        : {};
+    const NativeName =
+      native?.length > 0
+        ? {
+            native: { $in: native },
+          }
+        : {};
+    const FamilyId = familyId
+      ? {
+          familyId: { $eq: familyId },
+        }
+      : {};
+    const Gender = gender
+      ? {
+          gender: { $eq: gender },
+        }
+      : {};
+    const Firm = firmName
+      ? {
+          firm: { $eq: firmName },
+        }
+      : {};
     if (role === "ADMIN") {
-      const yuvas = await Yuvalist.find({}).skip(offset).limit(limit).exec();
-      const totalItems = await Yuvalist.countDocuments({});
+      const yuvas = await Yuvalist.find({
+        ...NativeName,
+        ...FirstName,
+        ...FamilyId,
+        ...Gender,
+        ...Firm,
+      })
+        .skip(offset)
+        .limit(limit)
+        .exec();
+      const totalItems = await Yuvalist.countDocuments({
+        ...NativeName,
+        ...FirstName,
+        ...FamilyId,
+        ...Gender,
+        ...Firm,
+      });
       const totalPages = Math.ceil(totalItems / limit);
       res
         .status(200)
@@ -65,12 +114,22 @@ router.get("/list", async (req, res) => {
       if (mangerRegion?.region) {
         const MangerYuvas = await Yuvalist.find({
           region: { $eq: mangerRegion?.region },
+          ...NativeName,
+          ...FirstName,
+          ...FamilyId,
+          ...Gender,
+          ...Firm,
         })
           .skip(offset)
           .limit(limit)
           .exec();
         const managerTotalItem = await Yuvalist.find({
           region: { $eq: mangerRegion?.region },
+          ...NativeName,
+          ...FirstName,
+          ...FamilyId,
+          ...Gender,
+          ...Firm,
         }).countDocuments({});
         const totalPages = Math.ceil(managerTotalItem / limit);
         res.status(200).json({
@@ -85,12 +144,22 @@ router.get("/list", async (req, res) => {
       if (mangerSamaj?.localSamaj) {
         const MangerYuvas = await Yuvalist.find({
           localSamaj: { $eq: mangerSamaj?.localSamaj },
+          ...NativeName,
+          ...FirstName,
+          ...FamilyId,
+          ...Gender,
+          ...Firm,
         })
           .skip(offset)
           .limit(limit)
           .exec();
         const managerTotalItem = await Yuvalist.find({
           localSamaj: { $eq: mangerSamaj?.localSamaj },
+          ...NativeName,
+          ...FirstName,
+          ...FamilyId,
+          ...Gender,
+          ...Firm,
         }).countDocuments({});
         const totalPages = Math.ceil(managerTotalItem / limit);
         res.status(200).json({
@@ -139,7 +208,7 @@ router.post("/addYuvaList", async (req, res) => {
 
 router.delete("/:id", async (req, res) => {
   if (!errorCheck(req, res)) {
-    await Yuvalist.deleteOne({id:{$in: req.params.id}});
+    await Yuvalist.deleteOne({ id: { $in: req.params.id } });
     res.status(200).json({ message: "Delete Successfully" });
   }
 });
@@ -170,63 +239,63 @@ router.get("/requests", async (req, res) => {
     const limit = parseInt(req.query.limit, 10) || 10;
     const offset = (page - 1) * limit;
     const Roles =
-        roles?.length > 0
-            ? {
-              role: { $in: roles },
-            }
-            : {};
-    const LastName =
-        lastName?.length > 0
-            ? {
-              lastName: { $in: lastName },
-            }
-            : {};
-    const FamilyId = familyId
+      roles?.length > 0
         ? {
+            role: { $in: roles },
+          }
+        : {};
+    const LastName =
+      lastName?.length > 0
+        ? {
+            lastName: { $in: lastName },
+          }
+        : {};
+    const FamilyId = familyId
+      ? {
           familyId: { $eq: familyId },
         }
-        : {};
+      : {};
     const FirstName = firstName
-        ? {
+      ? {
           firstName: { $in: firstName },
         }
-        : {};
+      : {};
     const Mobile = mobile
-        ? {
+      ? {
           mobile: { $eq: mobile },
         }
-        : {};
+      : {};
     const Email = email
-        ? {
+      ? {
           email: { $eq: email },
         }
-        : {};
+      : {};
     const Gender = gender
-        ? {
+      ? {
           gender: { $eq: gender },
         }
-        : {};
+      : {};
 
     const RegionData = await Region.findOne({
       state_id: { $in: state },
     });
     const State = RegionData
-        ? {
+      ? {
           region: { $eq: RegionData?.id },
         }
-        : {};
+      : {};
     const CurrentRegion =
-        region?.length > 0
-            ? {
-              region: { $in: region },
-            }
-            : {};
+      region?.length > 0
+        ? {
+            region: { $in: region },
+          }
+        : {};
     const CurrentSamaj =
-        samaj?.length > 0
-            ? {
-              localSamaj: { $in: samaj },
-            }
-            : {};
+      samaj?.length > 0
+        ? {
+            localSamaj: { $in: samaj },
+          }
+        : {};
     if (role === "ADMIN") {
       const users = await Yuvalist.find({
         allowed: { $eq: false },
@@ -242,9 +311,9 @@ router.get("/requests", async (req, res) => {
         ...Email,
         ...Roles,
       })
-          .skip(offset)
-          .limit(limit)
-          .exec();
+        .skip(offset)
+        .limit(limit)
+        .exec();
       const totalItems = await Yuvalist.find({
         allowed: { $eq: false },
         active: true,
@@ -261,8 +330,8 @@ router.get("/requests", async (req, res) => {
       }).countDocuments({});
       const totalPages = Math.ceil(totalItems / limit);
       res
-          .status(200)
-          .json({ total: totalItems, page, totalPages, data: users });
+        .status(200)
+        .json({ total: totalItems, page, totalPages, data: users });
     } else if (role === "REGION_MANAGER") {
       const mangerRegion = await User.findById(id);
       if (mangerRegion?.region) {
@@ -281,9 +350,9 @@ router.get("/requests", async (req, res) => {
           ...Email,
           ...Roles,
         })
-            .skip(offset)
-            .limit(limit)
-            .exec();
+          .skip(offset)
+          .limit(limit)
+          .exec();
         const managerTotalItem = await Yuvalist.find({
           allowed: { $eq: false },
           active: true,
@@ -325,9 +394,9 @@ router.get("/requests", async (req, res) => {
           ...Email,
           ...Roles,
         })
-            .skip(offset)
-            .limit(limit)
-            .exec();
+          .skip(offset)
+          .limit(limit)
+          .exec();
         const managerTotalItem = await Yuvalist.find({
           allowed: { $eq: false },
           active: true,
