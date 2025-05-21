@@ -24,7 +24,7 @@ const verifyToken = (req, res, next) => {
               message: error.name,
             };
           }
-        }
+        },
       );
     } else {
       req.error = {
@@ -54,8 +54,41 @@ router.get("/list", async (req, res) => {
   const page = parseInt(req.query.page, 10) || 1;
   const limit = parseInt(req.query.limit, 10) || 10;
   const offset = (page - 1) * limit;
-  const Districts = await District.find().skip(offset).limit(limit).exec();
-  const totalItems = await District.countDocuments({});
+  const { country = [], state = [], region = [], name } = req.query;
+  const Country =
+    country?.length > 0
+      ? {
+          country_id: { $in: country },
+        }
+      : {};
+  const State =
+    country?.length > 0
+      ? {
+          state_id: { $in: state },
+        }
+      : {};
+  const Region =
+    region?.length > 0
+      ? {
+          region_id: { $in: region },
+        }
+      : {};
+  const Name = name
+    ? {
+        name: { $eq: name },
+      }
+    : {};
+  const filter = {
+    ...Country,
+    ...Region,
+    ...State,
+    ...Name,
+  }
+  const Districts = await District.find(filter)
+    .skip(offset)
+    .limit(limit)
+    .exec();
+  const totalItems = await District.countDocuments(filter);
   const totalPages = Math.ceil(totalItems / limit);
   res
     .status(200)
@@ -125,8 +158,8 @@ router.patch("/update/:id", async (req, res) => {
     const { id } = req.params;
     const payload = { ...req.body };
     await District.updateOne(
-        { id: id },
-        { ...payload, updatedAt: new Date(), updatedBy: req?.user.id }
+      { id: id },
+      { ...payload, updatedAt: new Date(), updatedBy: req?.user.id },
     );
     res.status(200).json({ message: "Updated Successfully" });
   }

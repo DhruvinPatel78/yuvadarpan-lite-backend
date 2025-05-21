@@ -24,7 +24,7 @@ const verifyToken = (req, res, next) => {
               message: error.name,
             };
           }
-        }
+        },
       );
     } else {
       req.error = {
@@ -53,9 +53,18 @@ router.use(verifyToken);
 router.get("/list", async (req, res) => {
   const page = parseInt(req.query.page, 10) || 1;
   const limit = parseInt(req.query.limit, 10) || 10;
+  const { name } = req.query;
+  const Name = name
+    ? {
+        name: { $eq: name },
+      }
+    : {};
   const offset = (page - 1) * limit;
-  const Countries = await Country.find().skip(offset).limit(limit).exec();
-  const totalItems = await Country.countDocuments({});
+  const Countries = await Country.find({ ...Name })
+    .skip(offset)
+    .limit(limit)
+    .exec();
+  const totalItems = await Country.countDocuments({...Name});
   const totalPages = Math.ceil(totalItems / limit);
   res
     .status(200)
@@ -107,7 +116,7 @@ router.patch("/update/:id", async (req, res) => {
     const payload = { ...req.body };
     await Country.updateOne(
       { id: id },
-      { ...payload, updatedAt: new Date(), updatedBy: req?.user.id }
+      { ...payload, updatedAt: new Date(), updatedBy: req?.user.id },
     );
     res.status(200).json({ message: "Updated Successfully" });
   }
