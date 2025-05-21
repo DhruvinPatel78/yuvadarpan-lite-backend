@@ -24,7 +24,7 @@ const verifyToken = (req, res, next) => {
               message: error.name,
             };
           }
-        }
+        },
       );
     } else {
       req.error = {
@@ -54,8 +54,31 @@ router.get("/list", async (req, res) => {
   const page = parseInt(req.query.page, 10) || 1;
   const limit = parseInt(req.query.limit, 10) || 10;
   const offset = (page - 1) * limit;
-  const Regions = await Region.find().skip(offset).limit(limit).exec();
-  const totalItems = await Region.countDocuments({});
+  const { country = [], state = [], name } = req.query;
+  const Country =
+    country?.length > 0
+      ? {
+          country_id: { $in: country },
+        }
+      : {};
+  const State =
+    country?.length > 0
+      ? {
+          state_id: { $in: state },
+        }
+      : {};
+  const Name = name
+    ? {
+        name: { $eq: name },
+      }
+    : {};
+  const filter = {
+    ...Country,
+    ...State,
+    ...Name,
+  };
+  const Regions = await Region.find(filter).skip(offset).limit(limit).exec();
+  const totalItems = await Region.countDocuments(filter);
   const totalPages = Math.ceil(totalItems / limit);
   res.status(200).json({ total: totalItems, page, totalPages, data: Regions });
 });
@@ -123,8 +146,8 @@ router.patch("/update/:id", async (req, res) => {
     const { id } = req.params;
     const payload = { ...req.body };
     await Region.updateOne(
-        { id: id },
-        { ...payload, updatedAt: new Date(), updatedBy: req?.user.id }
+      { id: id },
+      { ...payload, updatedAt: new Date(), updatedBy: req?.user.id },
     );
     res.status(200).json({ message: "Updated Successfully" });
   }
