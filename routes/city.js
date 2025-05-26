@@ -54,8 +54,45 @@ router.get("/list", async (req, res) => {
   const page = parseInt(req.query.page, 10) || 1;
   const limit = parseInt(req.query.limit, 10) || 10;
   const offset = (page - 1) * limit;
-  const Cities = await City.find().skip(offset).limit(limit).exec();
-  const totalItems = await City.countDocuments({});
+  const { country = [], state = [], region = [],district = [], name } = req.query;
+  const Country =
+    country?.length > 0
+      ? {
+        country_id: { $in: country },
+      }
+      : {};
+  const State =
+    country?.length > 0
+      ? {
+        state_id: { $in: state },
+      }
+      : {};
+  const Region =
+    region?.length > 0
+      ? {
+        region_id: { $in: region },
+      }
+      : {};
+  const District =
+    region?.length > 0
+      ? {
+        district_id: { $in: district },
+      }
+      : {};
+  const Name = name
+    ? {
+      name: { $eq: name },
+    }
+    : {};
+  const filter = {
+    ...Country,
+    ...Region,
+    ...State,
+    ...Name,
+    ...District
+  }
+  const Cities = await City.find(filter).skip(offset).limit(limit).exec();
+  const totalItems = await City.countDocuments(filter);
   const totalPages = Math.ceil(totalItems / limit);
   res.status(200).json({ total: totalItems, page, totalPages, data: Cities });
 });
