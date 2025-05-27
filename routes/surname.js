@@ -54,8 +54,14 @@ router.get("/list", async (req, res) => {
   const page = parseInt(req.query.page, 10) || 1;
   const limit = parseInt(req.query.limit, 10) || 10;
   const offset = (page - 1) * limit;
-  const Surnames = await Surname.find().skip(offset).limit(limit).exec();
-  const totalItems = await Surname.countDocuments({});
+  const { name } = req.query;
+  const Name = name
+    ? {
+      name: { $eq: name },
+    }
+    : {};
+  const Surnames = await Surname.find({...Name}).skip(offset).limit(limit).exec();
+  const totalItems = await Surname.countDocuments({...Name});
   const totalPages = Math.ceil(totalItems / limit);
   res.status(200).json({ total: totalItems, page, totalPages, data: Surnames });
 });
