@@ -83,7 +83,14 @@ router.get("/list", async (req, res) => {
   res.status(200).json({ total: totalItems, page, totalPages, data: Regions });
 });
 router.get("/get-all-list", async (req, res) => {
-  const Regions = await Region.find();
+  const { data = []} = req.query;
+  const State =
+      data?.length > 0
+          ? {
+            state_id: { $in: data },
+          }
+          : {};
+  const Regions = await Region.find(State);
   res.status(200).json(Regions);
 });
 
