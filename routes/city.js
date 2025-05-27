@@ -103,7 +103,14 @@ router.get("/list", async (req, res) => {
   res.status(200).json({ total: totalItems, page, totalPages, data: Cities });
 });
 router.get("/get-all-list", async (req, res) => {
-  const Cities = await City.find();
+  const { data = []} = req.query;
+  const District =
+      data?.length > 0
+          ? {
+            district_id: { $in: data },
+          }
+          : {};
+  const Cities = await City.find(District);
   res.status(200).json(Cities);
 });
 
