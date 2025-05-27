@@ -95,7 +95,14 @@ router.get("/list", async (req, res) => {
     .json({ total: totalItems, page, totalPages, data: Districts });
 });
 router.get("/get-all-list", async (req, res) => {
-  const Districts = await District.find();
+  const { data = []} = req.query;
+  const Region =
+      data?.length > 0
+          ? {
+            region_id: { $in: data },
+          }
+          : {};
+  const Districts = await District.find(Region);
   res.status(200).json(Districts);
 });
 
