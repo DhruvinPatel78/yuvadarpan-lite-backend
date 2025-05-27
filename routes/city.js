@@ -24,7 +24,7 @@ const verifyToken = (req, res, next) => {
               message: error.name,
             };
           }
-        }
+        },
       );
     } else {
       req.error = {
@@ -54,43 +54,49 @@ router.get("/list", async (req, res) => {
   const page = parseInt(req.query.page, 10) || 1;
   const limit = parseInt(req.query.limit, 10) || 10;
   const offset = (page - 1) * limit;
-  const { country = [], state = [], region = [],district = [], name } = req.query;
+  const {
+    country = [],
+    state = [],
+    region = [],
+    district = [],
+    name,
+  } = req.query;
   const Country =
     country?.length > 0
       ? {
-        country_id: { $in: country },
-      }
+          country_id: { $in: country },
+        }
       : {};
   const State =
-    country?.length > 0
+    state?.length > 0
       ? {
-        state_id: { $in: state },
-      }
+          state_id: { $in: state },
+        }
       : {};
   const Region =
     region?.length > 0
       ? {
-        region_id: { $in: region },
-      }
+          region_id: { $in: region },
+        }
       : {};
   const District =
-    region?.length > 0
+    district?.length > 0
       ? {
-        district_id: { $in: district },
-      }
+          district_id: { $in: district },
+        }
       : {};
   const Name = name
     ? {
-      name: { $eq: name },
-    }
+        name: { $eq: name },
+      }
     : {};
   const filter = {
     ...Country,
     ...Region,
     ...State,
     ...Name,
-    ...District
-  }
+    ...District,
+  };
   const Cities = await City.find(filter).skip(offset).limit(limit).exec();
   const totalItems = await City.countDocuments(filter);
   const totalPages = Math.ceil(totalItems / limit);
@@ -159,12 +165,11 @@ router.patch("/update/:id", async (req, res) => {
     const { id } = req.params;
     const payload = { ...req.body };
     await City.updateOne(
-        { id: id },
-        { ...payload, updatedAt: new Date(), updatedBy: req?.user.id }
+      { id: id },
+      { ...payload, updatedAt: new Date(), updatedBy: req?.user.id },
     );
     res.status(200).json({ message: "Updated Successfully" });
   }
 });
-
 
 module.exports = router;
