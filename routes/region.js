@@ -62,7 +62,7 @@ router.get("/list", async (req, res) => {
         }
       : {};
   const State =
-    country?.length > 0
+    state?.length > 0
       ? {
           state_id: { $in: state },
         }
