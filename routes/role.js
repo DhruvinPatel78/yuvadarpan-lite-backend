@@ -24,7 +24,7 @@ const verifyToken = (req, res, next) => {
               message: error.name,
             };
           }
-        }
+        },
       );
     } else {
       req.error = {
@@ -54,16 +54,24 @@ router.get("/list", async (req, res) => {
   const page = parseInt(req.query.page, 10) || 1;
   const limit = parseInt(req.query.limit, 10) || 10;
   const offset = (page - 1) * limit;
-  const Roles = await Role.find().skip(offset).limit(limit).exec();
-  const totalItems = await Role.countDocuments({});
+  const { name } = req.query;
+  const Name = name
+    ? {
+        name: { $eq: name },
+      }
+    : {};
+  const Roles = await Role.find({ ...Name })
+    .skip(offset)
+    .limit(limit)
+    .exec();
+  const totalItems = await Role.countDocuments({ ...Name });
   const totalPages = Math.ceil(totalItems / limit);
   res.status(200).json({ total: totalItems, page, totalPages, data: Roles });
 });
 router.get("/get-all-list", async (req, res) => {
-  const Roles = await Role.find()
+  const Roles = await Role.find();
   res.status(200).json(Roles);
-})
-
+});
 
 // Add new country
 router.post("/add", async (req, res) => {
@@ -107,7 +115,7 @@ router.patch("/update/:id", async (req, res) => {
     const payload = { ...req.body };
     await Role.updateOne(
       { id: id },
-      { ...payload, updatedAt: new Date(), updatedBy: req?.user.id }
+      { ...payload, updatedAt: new Date(), updatedBy: req?.user.id },
     );
     res.status(200).json({ message: "Update Successfully" });
   }
