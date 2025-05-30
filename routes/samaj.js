@@ -97,7 +97,14 @@ router.get("/list", async (req, res) => {
   res.status(200).json({ total: totalItems, page, totalPages, data: Samajs });
 });
 router.get("/get-all-list", async (req, res) => {
-  const Samajs = await Samaj.find();
+  const { data = []} = req.query;
+  const Data =
+      data?.length > 0
+          ? {
+            region_id: { $in: data },
+          }
+          : {};
+  const Samajs = await Samaj.find(Data);
   res.status(200).json(Samajs);
 });
 
