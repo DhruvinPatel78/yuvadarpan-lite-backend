@@ -4,6 +4,7 @@ const router = express.Router();
 const Yuvalist = require("../models/yuvalist");
 const User = require("../models/user");
 const Region = require("../models/region");
+const Surname = require("../models/surname");
 
 const verifyToken = (req, res, next) => {
   const authHeader = req.headers.authorization;
@@ -154,6 +155,11 @@ router.get("/list", async (req, res) => {
       }
     }
   }
+});
+
+router.get("/get-all-list", async (req, res) => {
+  const dbYuva = await Yuvalist.find();
+  res.status(200).json(dbYuva);
 });
 
 router.get("/list/:id", async (req, res) => {
