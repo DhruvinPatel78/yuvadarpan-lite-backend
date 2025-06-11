@@ -158,8 +158,29 @@ router.get("/list", async (req, res) => {
 });
 
 router.get("/get-all-list", async (req, res) => {
-  const dbYuva = await Yuvalist.find();
-  res.status(200).json(dbYuva);
+  if (!errorCheck(req, res)) {
+    const {id, role} = req.user;
+    if (role === "ADMIN") {
+      const dbYuva = await Yuvalist.find();
+      res.status(200).json(dbYuva);
+    }else if (role === "REGION_MANAGER") {
+      const mangerRegion = await User.findById(id);
+      if (mangerRegion?.region) {
+        const dbYuva = await Yuvalist.find({
+          region: { $eq: mangerRegion?.region },
+        });
+        res.status(200).json(dbYuva);
+      }
+    } else if (role === "SAMAJ_MANAGER") {
+      const mangerSamaj = await User.findById(id);
+      if (mangerSamaj?.localSamaj) {
+        const dbYuva = await Yuvalist.find({
+          localSamaj: { $eq: mangerSamaj?.localSamaj },
+        });
+        res.status(200).json(dbYuva);
+      }
+    }
+  }
 });
 
 router.get("/list/:id", async (req, res) => {
