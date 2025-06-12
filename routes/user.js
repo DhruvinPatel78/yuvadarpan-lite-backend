@@ -464,13 +464,14 @@ router.post("/add", async (req, res) => {
 
 router.patch("/update/:id", async (req, res) => {
   if (!errorCheck(req, res)) {
+    const { id } = req.params;
     const payload = { ...req.body };
     if (payload?.password) {
       payload.password = await bcrypt.hash(payload.password, 10);
     }
     await User.updateOne(
-      { _id: req.body.id },
-      { ...payload, updatedAt: new Date(), updatedBy: req.body.id },
+      { _id: id },
+      { ...payload, updatedAt: new Date(), updatedBy: req?.user.id },
     );
     res.status(200).json({ message: "Updated Successfully" });
   }
