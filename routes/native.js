@@ -57,7 +57,7 @@ router.get("/list", async (req, res) => {
   const { name } = req.query;
   const Name = name
     ? {
-        name: { $eq: name },
+        name: { $regex: new RegExp(name, 'i') },
       }
     : {};
   const Natives = await Native.find({ ...Name })
