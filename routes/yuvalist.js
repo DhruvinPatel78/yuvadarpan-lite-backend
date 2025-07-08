@@ -3,8 +3,6 @@ const jwt = require("jsonwebtoken");
 const router = express.Router();
 const Yuvalist = require("../models/yuvalist");
 const User = require("../models/user");
-const Region = require("../models/region");
-const Surname = require("../models/surname");
 
 const verifyToken = (req, res, next) => {
   const authHeader = req.headers.authorization;

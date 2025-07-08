@@ -24,7 +24,7 @@ const verifyToken = (req, res, next) => {
               message: error.name,
             };
           }
-        },
+        }
       );
     } else {
       req.error = {
@@ -57,7 +57,7 @@ router.get("/list", async (req, res) => {
   const { name } = req.query;
   const Name = name
     ? {
-        name: { $eq: name },
+        name: { $regex: new RegExp(name, "i") },
       }
     : {};
   const Roles = await Role.find({ ...Name })
@@ -115,7 +115,7 @@ router.patch("/update/:id", async (req, res) => {
     const payload = { ...req.body };
     await Role.updateOne(
       { id: id },
-      { ...payload, updatedAt: new Date(), updatedBy: req?.user.id },
+      { ...payload, updatedAt: new Date(), updatedBy: req?.user.id }
     );
     res.status(200).json({ message: "Update Successfully" });
   }

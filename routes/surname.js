@@ -57,11 +57,14 @@ router.get("/list", async (req, res) => {
   const { name } = req.query;
   const Name = name
     ? {
-      name: { $eq: name },
-    }
+        name: { $regex: new RegExp(name, "i") },
+      }
     : {};
-  const Surnames = await Surname.find({...Name}).skip(offset).limit(limit).exec();
-  const totalItems = await Surname.countDocuments({...Name});
+  const Surnames = await Surname.find({ ...Name })
+    .skip(offset)
+    .limit(limit)
+    .exec();
+  const totalItems = await Surname.countDocuments({ ...Name });
   const totalPages = Math.ceil(totalItems / limit);
   res.status(200).json({ total: totalItems, page, totalPages, data: Surnames });
 });
@@ -111,8 +114,8 @@ router.patch("/update/:id", async (req, res) => {
     const { id } = req.params;
     const payload = { ...req.body };
     await Surname.updateOne(
-        { id: id },
-        { ...payload, updatedAt: new Date(), updatedBy: req?.user.id }
+      { id: id },
+      { ...payload, updatedAt: new Date(), updatedBy: req?.user.id }
     );
     res.status(200).json({ message: "Updated Successfully" });
   }

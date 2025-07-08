@@ -56,7 +56,7 @@ router.get("/list", async (req, res) => {
   const { name } = req.query;
   const Name = name
     ? {
-        name: { $eq: name },
+        name: { $regex: new RegExp(name, "i") },
       }
     : {};
   const offset = (page - 1) * limit;
@@ -64,7 +64,7 @@ router.get("/list", async (req, res) => {
     .skip(offset)
     .limit(limit)
     .exec();
-  const totalItems = await Country.countDocuments({...Name});
+  const totalItems = await Country.countDocuments({ ...Name });
   const totalPages = Math.ceil(totalItems / limit);
   res
     .status(200)
