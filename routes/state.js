@@ -24,7 +24,7 @@ const verifyToken = (req, res, next) => {
               message: error.name,
             };
           }
-        },
+        }
       );
     } else {
       req.error = {
@@ -63,7 +63,7 @@ router.get("/list", async (req, res) => {
       : {};
   const Name = name
     ? {
-        name: { $eq: name },
+        name: { $regex: new RegExp(name, "i") },
       }
     : {};
   const filter = {
@@ -76,13 +76,13 @@ router.get("/list", async (req, res) => {
   res.status(200).json({ total: totalItems, page, totalPages, data: States });
 });
 router.get("/get-all-list", async (req, res) => {
-  const { data = []} = req.query;
+  const { data = [] } = req.query;
   const Country =
-      data?.length > 0
-          ? {
-            country_id: { $in: data },
-          }
-          : {};
+    data?.length > 0
+      ? {
+          country_id: { $in: data },
+        }
+      : {};
   const States = await State.find(Country);
   res.status(200).json(States);
 });
@@ -138,7 +138,7 @@ router.patch("/update/:id", async (req, res) => {
     const payload = { ...req.body };
     await State.updateOne(
       { id: id },
-      { ...payload, updatedAt: new Date(), updatedBy: req?.user.id },
+      { ...payload, updatedAt: new Date(), updatedBy: req?.user.id }
     );
     res.status(200).json({ message: "Updated Successfully" });
   }
