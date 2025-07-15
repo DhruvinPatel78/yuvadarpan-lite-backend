@@ -421,7 +421,16 @@ router.post("/verifyOtp", async (req, res) => {
 
 router.post("/signIn", async (req, res) => {
   const { email, password } = req.body;
-  const dbUser = await User.findOne({ email }).lean();
+  const emailRegex = /^[\w-.]+@([\w-]+\.)+[\w-]{2,4}$/;
+  const Email = email
+      ? emailRegex.test(email) ? {
+        email: { $eq: email },
+      } : {
+        mobile: { $eq: email },
+      }
+      : {};
+  const dbUser = await User.findOne(Email).lean();
+
   if (dbUser !== null && dbUser !== undefined) {
     const passwordMatched = await bcrypt.compare(password, dbUser.password);
     if (passwordMatched) {
