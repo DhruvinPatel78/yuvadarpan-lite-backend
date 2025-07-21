@@ -25,7 +25,7 @@ const verifyToken = (req, res, next) => {
             message: error.name,
           };
         }
-      },
+      }
     );
   } else {
     req.error = {
@@ -406,12 +406,19 @@ router.post("/verifyOtp", async (req, res) => {
     const { email, otp } = req.body;
     const isUserExist = await User.findOne({ email });
     if (isUserExist) {
-      const isOtpExist = await OTP.findOne({ otp: otp });
+      const isOtpExist = await OTP.findOne({ otp: otp, email: email });
       if (isOtpExist) {
+        const now = new Date();
+        const createdAt = new Date(isOtpExist.createdAt);
+        const diffSeconds = (now - createdAt) / 1000;
+        if (diffSeconds > 60) {
+          await OTP.findByIdAndDelete(isOtpExist?.id);
+          return res.status(410).send({ message: "otp-expired" });
+        }
         await OTP.findByIdAndDelete(isOtpExist?.id);
         res.status(200).send({ message: "otp-verify-successfully" });
       } else {
-        res.status(404).send({ message: "invalid-otp" });
+        return res.status(404).send({ message: "invalid-otp" });
       }
     } else {
       res.status(404).send({ message: "email-invalid" });
@@ -431,7 +438,7 @@ router.post("/signIn", async (req, res) => {
           process.env.JWT_SECRET,
           {
             expiresIn: "30d",
-          },
+          }
         );
         delete dbUser.password;
         res.send({ data: dbUser, token });
@@ -471,7 +478,7 @@ router.patch("/update/:id", async (req, res) => {
     }
     await User.updateOne(
       { _id: id },
-      { ...payload, updatedAt: new Date(), updatedBy: req?.user.id },
+      { ...payload, updatedAt: new Date(), updatedBy: req?.user.id }
     );
     res.status(200).json({ message: "Updated Successfully" });
   }
@@ -498,7 +505,7 @@ router.patch("/forgotPassword", async (req, res) => {
           updatedAt: new Date(),
           updatedBy: isUserExits.id,
         },
-      },
+      }
     );
     res.status(200).send({ message: "password-update-successfully" });
   } else {
@@ -517,7 +524,7 @@ router.patch("/approveRejectMany", async (req, res) => {
           updatedAt: new Date(),
           updatedBy: req.body.id,
         },
-      },
+      }
     );
     res.status(200).json({ message: "Updated Successfully" });
   }
