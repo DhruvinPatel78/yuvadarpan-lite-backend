@@ -6,6 +6,7 @@ const User = require("../models/user");
 const OtpGenerator = require("otp-generator");
 const OTP = require("../models/OTP");
 const Region = require("../models/region");
+const { v4: uuidv4 } = require("uuid");
 
 const verifyToken = (req, res, next) => {
   const authHeader = req.headers.authorization;
@@ -373,62 +374,130 @@ router.post("/signUp", async (req, res) => {
   res.send(dbUser);
 });
 
-router.post("/sendOtp", async (req, res) => {
-  if (!errorCheck(req, res)) {
-    const { email } = req.body;
-    const isUserExist = await User.findOne({ email });
-    if (isUserExist) {
-      let otp = OtpGenerator.generate(6, {
-        upperCaseAlphabets: false,
-        lowerCaseAlphabets: false,
-        specialChars: false,
-      });
-      const result = await OTP.findOne({ otp: otp });
-      while (result) {
-        otp = OtpGenerator.generate(6, {
-          upperCaseAlphabets: false,
-        });
+router.post("/add", async (req, res) => {
+  const user = req.body;
+  user.password = await bcrypt.hash(user.password, 10);
+  const Email = user.email
+    ? {
+        email: { $eq: user.email },
       }
-      const otpPayload = { email, otp };
-      await OTP.create(otpPayload);
-      res.status(200).json({
-        message: `otp-sent-successfully`,
-        otp,
+    : {};
+  const emailExist = await User.findOne(Email).lean();
+  const Mobile = user.mobile
+    ? {
+        mobile: { $eq: user.mobile },
+      }
+    : {};
+  const mobileExist = await User.findOne(Mobile).lean();
+
+  if (emailExist || mobileExist) {
+    const errorMessage =
+      emailExist && mobileExist
+        ? "Email-and-Mobile-is-already-exist"
+        : emailExist
+          ? "Email-is-already-exist"
+          : "Mobile-is-already-exist";
+    res.status(401).json({ message: errorMessage });
+  } else {
+    const dbUser = await User.create({
+      ...user,
+      id: uuidv4().replace(/-/g, ""),
+      createdAt: new Date(),
+      updatedAt: null,
+      createdBy: null,
+      updatedBy: null,
+      active: true,
+      allowed: false,
+    });
+    res.send(dbUser);
+  }
+});
+
+router.post("/sendOtp", async (req, res) => {
+  const { email } = req.body;
+  const emailRegex = /^[\w-.]+@([\w-]+\.)+[\w-]{2,4}$/;
+  const Email = email
+    ? emailRegex.test(email)
+      ? {
+          email: { $eq: email },
+        }
+      : {
+          mobile: { $eq: email },
+        }
+    : {};
+  const dbUser = await User.findOne(Email).lean();
+
+  if (dbUser) {
+    let otp = OtpGenerator.generate(6, {
+      upperCaseAlphabets: false,
+      lowerCaseAlphabets: false,
+      specialChars: false,
+    });
+    const result = await OTP.findOne({ otp: otp });
+    while (result) {
+      otp = OtpGenerator.generate(6, {
+        upperCaseAlphabets: false,
       });
-    } else {
-      res.status(404).send({ message: "email-invalid" });
     }
+    const otpPayload = { email, otp };
+    await OTP.create(otpPayload);
+    res.status(200).json({
+      message: `otp-sent-successfully`,
+      otp,
+    });
+  } else {
+    res.status(404).send({ message: "email-invalid" });
   }
 });
 
 router.post("/verifyOtp", async (req, res) => {
-  if (!errorCheck(req, res)) {
-    const { email, otp } = req.body;
-    const isUserExist = await User.findOne({ email });
-    if (isUserExist) {
+  const { email, otp } = req.body;
+
+  const emailRegex = /^[\w-.]+@([\w-]+\.)+[\w-]{2,4}$/;
+  const Email = email
+    ? emailRegex.test(email)
+      ? {
+          email: { $eq: email },
+        }
+      : {
+          mobile: { $eq: email },
+        }
+    : {};
+  const isUserExit = await User.findOne(Email).lean();
+  if (isUserExit) {
       const isOtpExist = await OTP.findOne({ otp: otp, email: email });
       if (isOtpExist) {
-        const now = new Date();
-        const createdAt = new Date(isOtpExist.createdAt);
-        const diffSeconds = (now - createdAt) / 1000;
-        if (diffSeconds > 60) {
+          const now = new Date();
+          const createdAt = new Date(isOtpExist.createdAt);
+          const diffSeconds = (now - createdAt) / 1000;
+          if (diffSeconds > 60) {
+              await OTP.findByIdAndDelete(isOtpExist?.id);
+              return res.status(410).send({ message: "otp-expired" });
+          }
           await OTP.findByIdAndDelete(isOtpExist?.id);
-          return res.status(410).send({ message: "otp-expired" });
-        }
-        await OTP.findByIdAndDelete(isOtpExist?.id);
-        res.status(200).send({ message: "otp-verify-successfully" });
+          res.status(200).send({ message: "otp-verify-successfully" });
       } else {
-        return res.status(404).send({ message: "invalid-otp" });
+          return res.status(404).send({ message: "invalid-otp" });
       }
-    } else {
-      res.status(404).send({ message: "email-invalid" });
-    }
+  } else {
+    res.status(404).send({ message: "email-invalid" });
   }
 });
 
 router.post("/signIn", async (req, res) => {
   const { email, password } = req.body;
-  const dbUser = await User.findOne({ email }).lean();
+  const emailRegex = /^[\w-.]+@([\w-]+\.)+[\w-]{2,4}$/;
+  const Email = email
+    ? emailRegex.test(email)
+      ? {
+          email: { $eq: email },
+        }
+      : {
+          mobile: { $eq: email },
+        }
+    : {};
+  const dbUser = await User.findOne(Email).lean();
+
   if (dbUser !== null && dbUser !== undefined) {
     const passwordMatched = await bcrypt.compare(password, dbUser.password);
     if (passwordMatched) {
@@ -451,22 +520,6 @@ router.post("/signIn", async (req, res) => {
   } else {
     res.status(401).send({ message: "password-or-email-incorrect" });
   }
-});
-
-router.post("/add", async (req, res) => {
-  const user = req.body;
-  user.password = await bcrypt.hash(user.password, 10);
-  const dbUser = await User.create({
-    ...user,
-    id: crypto.randomUUID().replace(/-/g, ""),
-    createdAt: new Date(),
-    updatedAt: null,
-    createdBy: null,
-    updatedBy: null,
-    active: true,
-    allowed: false,
-  });
-  res.send(dbUser);
 });
 
 router.patch("/update/:id", async (req, res) => {
@@ -494,11 +547,23 @@ router.delete("/delete", async (req, res) => {
 
 router.patch("/forgotPassword", async (req, res) => {
   const { email, password } = req.body;
-  const isUserExits = await User.findOne({ email });
+
+  const emailRegex = /^[\w-.]+@([\w-]+\.)+[\w-]{2,4}$/;
+  const Email = email
+    ? emailRegex.test(email)
+      ? {
+          email: { $eq: email },
+        }
+      : {
+          mobile: { $eq: email },
+        }
+    : {};
+  const isUserExits = await User.findOne(Email).lean();
+
   if (isUserExits) {
     const newPassword = await bcrypt.hash(password, 10);
     await User.updateOne(
-      { _id: isUserExits?.id },
+      { id: isUserExits?.id },
       {
         $set: {
           password: newPassword,
