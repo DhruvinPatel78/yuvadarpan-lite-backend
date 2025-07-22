@@ -3,6 +3,7 @@ const jwt = require("jsonwebtoken");
 const router = express.Router();
 const Yuvalist = require("../models/yuvalist");
 const User = require("../models/user");
+const { v4: uuidv4 } = require('uuid');
 
 const verifyToken = (req, res, next) => {
   const authHeader = req.headers.authorization;
@@ -201,7 +202,8 @@ router.post("/addYuvaList", async (req, res) => {
   if (user.role === "ADMIN") {
     const dbYuvaList = await Yuvalist.create({
       ...data,
-      id: crypto.randomUUID().replace(/-/g, ""),
+      // id: crypto.randomUUID().replace(/-/g, ""),
+      id: uuidv4().replace(/-/g, ""),
       active: true,
       createdAt: new Date(),
       updatedAt: null,
