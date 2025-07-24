@@ -7,6 +7,7 @@ const OtpGenerator = require("otp-generator");
 const OTP = require("../models/OTP");
 const Region = require("../models/region");
 const { v4: uuidv4 } = require("uuid");
+const { sendNotification } = require("../utils/fcm");
 
 const verifyToken = (req, res, next) => {
   const authHeader = req.headers.authorization;
@@ -26,7 +27,7 @@ const verifyToken = (req, res, next) => {
             message: error.name,
           };
         }
-      }
+      },
     );
   } else {
     req.error = {
@@ -358,21 +359,21 @@ router.get("/requests", async (req, res) => {
   }
 });
 
-router.post("/signUp", async (req, res) => {
-  const user = req.body;
-  user.password = await bcrypt.hash(user.password, 10);
-  const dbUser = await User.create({
-    ...user,
-    id: crypto.randomUUID().replace(/-/g, ""),
-    createdAt: new Date(),
-    updatedAt: null,
-    createdBy: null,
-    updatedBy: null,
-    active: true,
-    allowed: false,
-  });
-  res.send(dbUser);
-});
+// router.post("/signUp", async (req, res) => {
+//   const user = req.body;
+//   user.password = await bcrypt.hash(user.password, 10);
+//   const dbUser = await User.create({
+//     ...user,
+//     id: crypto.randomUUID().replace(/-/g, ""),
+//     createdAt: new Date(),
+//     updatedAt: null,
+//     createdBy: null,
+//     updatedBy: null,
+//     active: true,
+//     allowed: false,
+//   });
+//   res.send(dbUser);
+// });
 
 router.post("/add", async (req, res) => {
   const user = req.body;
@@ -408,7 +409,19 @@ router.post("/add", async (req, res) => {
       updatedBy: null,
       active: true,
       allowed: false,
+      fcmToken: user.fcmToken || null,
     });
+    if (dbUser.fcmToken) {
+      try {
+        await sendNotification(
+          dbUser.fcmToken,
+          "Registration Successful",
+          "Welcome to Yuvadarpan! Your registration was successful.",
+        );
+      } catch (err) {
+        console.error("FCM notification error:", err);
+      }
+    }
     res.send(dbUser);
   }
 });
@@ -465,20 +478,20 @@ router.post("/verifyOtp", async (req, res) => {
     : {};
   const isUserExit = await User.findOne(Email).lean();
   if (isUserExit) {
-      const isOtpExist = await OTP.findOne({ otp: otp, email: email });
-      if (isOtpExist) {
-          const now = new Date();
-          const createdAt = new Date(isOtpExist.createdAt);
-          const diffSeconds = (now - createdAt) / 1000;
-          if (diffSeconds > 60) {
-              await OTP.findByIdAndDelete(isOtpExist?.id);
-              return res.status(410).send({ message: "otp-expired" });
-          }
-          await OTP.findByIdAndDelete(isOtpExist?.id);
-          res.status(200).send({ message: "otp-verify-successfully" });
-      } else {
-          return res.status(404).send({ message: "invalid-otp" });
+    const isOtpExist = await OTP.findOne({ otp: otp, email: email });
+    if (isOtpExist) {
+      const now = new Date();
+      const createdAt = new Date(isOtpExist.createdAt);
+      const diffSeconds = (now - createdAt) / 1000;
+      if (diffSeconds > 60) {
+        await OTP.findByIdAndDelete(isOtpExist?.id);
+        return res.status(410).send({ message: "otp-expired" });
       }
+      await OTP.findByIdAndDelete(isOtpExist?.id);
+      res.status(200).send({ message: "otp-verify-successfully" });
+    } else {
+      return res.status(404).send({ message: "invalid-otp" });
+    }
   } else {
     res.status(404).send({ message: "email-invalid" });
   }
@@ -507,7 +520,7 @@ router.post("/signIn", async (req, res) => {
           process.env.JWT_SECRET,
           {
             expiresIn: "30d",
-          }
+          },
         );
         delete dbUser.password;
         res.send({ data: dbUser, token });
@@ -531,7 +544,7 @@ router.patch("/update/:id", async (req, res) => {
     }
     await User.updateOne(
       { _id: id },
-      { ...payload, updatedAt: new Date(), updatedBy: req?.user.id }
+      { ...payload, updatedAt: new Date(), updatedBy: req?.user.id },
     );
     res.status(200).json({ message: "Updated Successfully" });
   }
@@ -570,7 +583,7 @@ router.patch("/forgotPassword", async (req, res) => {
           updatedAt: new Date(),
           updatedBy: isUserExits.id,
         },
-      }
+      },
     );
     res.status(200).send({ message: "password-update-successfully" });
   } else {
@@ -589,7 +602,7 @@ router.patch("/approveRejectMany", async (req, res) => {
           updatedAt: new Date(),
           updatedBy: req.body.id,
         },
-      }
+      },
     );
     res.status(200).json({ message: "Updated Successfully" });
   }

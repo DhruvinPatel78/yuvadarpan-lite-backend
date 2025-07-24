@@ -45,6 +45,10 @@ const userSchema = new mongoose.Schema({
     type: String,
     required: true,
   },
+  // deviceId: {
+  //   type: String,
+  //   required: true,
+  // },
   active: Boolean,
   allowed: Boolean,
   role: String,
@@ -53,6 +57,7 @@ const userSchema = new mongoose.Schema({
   createdBy: String,
   gender: String,
   updatedBy: String,
+  fcmToken: { type: String },
 });
 
 const User = mongoose.model("User", userSchema);
