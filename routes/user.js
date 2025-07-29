@@ -141,6 +141,7 @@ router.get("/list", async (req, res) => {
     };
     if (role === "ADMIN") {
       const users = await User.find({ ...filterSearch })
+        .sort({ _id: -1 })
         .skip(offset)
         .limit(limit)
         .exec();
@@ -156,6 +157,7 @@ router.get("/list", async (req, res) => {
           region: { $eq: mangerRegion?.region },
           ...filterSearch,
         })
+          .sort({ _id: -1 })
           .skip(offset)
           .limit(limit)
           .exec();
@@ -178,6 +180,7 @@ router.get("/list", async (req, res) => {
           localSamaj: { $eq: mangerSamaj?.localSamaj },
           ...filterSearch,
         })
+          .sort({ _id: -1 })
           .skip(offset)
           .limit(limit)
           .exec();
@@ -291,6 +294,7 @@ router.get("/requests", async (req, res) => {
         active: true,
         ...filterSearch,
       })
+        .sort({ _id: -1 })
         .skip(offset)
         .limit(limit)
         .exec();
@@ -312,6 +316,7 @@ router.get("/requests", async (req, res) => {
           region: { $eq: mangerRegion?.region },
           ...filterSearch,
         })
+          .sort({ _id: -1 })
           .skip(offset)
           .limit(limit)
           .exec();
@@ -338,6 +343,7 @@ router.get("/requests", async (req, res) => {
           localSamaj: { $eq: mangerSamaj?.localSamaj },
           ...filterSearch,
         })
+          .sort({ _id: -1 })
           .skip(offset)
           .limit(limit)
           .exec();
@@ -359,23 +365,60 @@ router.get("/requests", async (req, res) => {
   }
 });
 
-// router.post("/signUp", async (req, res) => {
-//   const user = req.body;
-//   user.password = await bcrypt.hash(user.password, 10);
-//   const dbUser = await User.create({
-//     ...user,
-//     id: crypto.randomUUID().replace(/-/g, ""),
-//     createdAt: new Date(),
-//     updatedAt: null,
-//     createdBy: null,
-//     updatedBy: null,
-//     active: true,
-//     allowed: false,
-//   });
-//   res.send(dbUser);
-// });
-
 router.post("/add", async (req, res) => {
+  if (!errorCheck(req, res)) {
+    const user = req.body;
+    user.password = await bcrypt.hash(user.password, 10);
+    const Email = user.email
+      ? {
+          email: { $eq: user.email },
+        }
+      : {};
+    const emailExist = await User.findOne(Email).lean();
+    const Mobile = user.mobile
+      ? {
+          mobile: { $eq: user.mobile },
+        }
+      : {};
+    const mobileExist = await User.findOne(Mobile).lean();
+
+    if (emailExist || mobileExist) {
+      const errorMessage =
+        emailExist && mobileExist
+          ? "Email-and-Mobile-is-already-exist"
+          : emailExist
+            ? "Email-is-already-exist"
+            : "Mobile-is-already-exist";
+      res.status(401).json({ message: errorMessage });
+    } else {
+      const dbUser = await User.create({
+        ...user,
+        id: uuidv4().replace(/-/g, ""),
+        createdAt: new Date(),
+        updatedAt: null,
+        createdBy: null,
+        updatedBy: null,
+        active: true,
+        allowed: false,
+        fcmToken: user.fcmToken || null,
+      });
+      if (dbUser.fcmToken) {
+        try {
+          await sendNotification(
+            dbUser.fcmToken,
+            "Registration Successful",
+            "Welcome to Yuvadarpan! Your registration was successful.",
+          );
+        } catch (err) {
+          console.error("FCM notification error:", err);
+        }
+      }
+      res.send(dbUser);
+    }
+  }
+});
+
+router.post("/signup", async (req, res) => {
   const user = req.body;
   user.password = await bcrypt.hash(user.password, 10);
   const Email = user.email
@@ -407,7 +450,7 @@ router.post("/add", async (req, res) => {
       updatedAt: null,
       createdBy: null,
       updatedBy: null,
-      active: true,
+      active: false,
       allowed: false,
       fcmToken: user.fcmToken || null,
     });
