@@ -7,7 +7,7 @@ const OtpGenerator = require("otp-generator");
 const OTP = require("../models/OTP");
 const Region = require("../models/region");
 const { v4: uuidv4 } = require("uuid");
-const { sendNotification } = require("../utils/fcm");
+// const { sendNotification } = require("../utils/fcm");
 
 const verifyToken = (req, res, next) => {
   const authHeader = req.headers.authorization;
@@ -402,17 +402,17 @@ router.post("/add", async (req, res) => {
         allowed: false,
         fcmToken: user.fcmToken || null,
       });
-      if (dbUser.fcmToken) {
-        try {
-          await sendNotification(
-            dbUser.fcmToken,
-            "Registration Successful",
-            "Welcome to Yuvadarpan! Your registration was successful.",
-          );
-        } catch (err) {
-          console.error("FCM notification error:", err);
-        }
-      }
+      // if (dbUser.fcmToken) {
+      //   try {
+      //     await sendNotification(
+      //       dbUser.fcmToken,
+      //       "Registration Successful",
+      //       "Welcome to Yuvadarpan! Your registration was successful.",
+      //     );
+      //   } catch (err) {
+      //     console.error("FCM notification error:", err);
+      //   }
+      // }
       res.send(dbUser);
     }
   }
@@ -454,17 +454,17 @@ router.post("/signup", async (req, res) => {
       allowed: false,
       fcmToken: user.fcmToken || null,
     });
-    if (dbUser.fcmToken) {
-      try {
-        await sendNotification(
-          dbUser.fcmToken,
-          "Registration Successful",
-          "Welcome to Yuvadarpan! Your registration was successful.",
-        );
-      } catch (err) {
-        console.error("FCM notification error:", err);
-      }
-    }
+    // if (dbUser.fcmToken) {
+    //   try {
+    //     await sendNotification(
+    //       dbUser.fcmToken,
+    //       "Registration Successful",
+    //       "Welcome to Yuvadarpan! Your registration was successful.",
+    //     );
+    //   } catch (err) {
+    //     console.error("FCM notification error:", err);
+    //   }
+    // }
     res.send(dbUser);
   }
 });
