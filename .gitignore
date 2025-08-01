@@ -3,4 +3,3 @@
 yarn.lock
 .idea
 .netlify
-utils/serviceAccountKey.json
