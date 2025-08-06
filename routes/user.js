@@ -7,11 +7,7 @@ const OtpGenerator = require("otp-generator");
 const OTP = require("../models/OTP");
 const Region = require("../models/region");
 const { v4: uuidv4 } = require("uuid");
-const {
-  sendNotification,
-  sendActiveStatusNotification,
-  sendApprovalNotification,
-} = require("../utils/fcm");
+const { sendNotification } = require("../utils/fcm");
 
 const verifyToken = (req, res, next) => {
   const authHeader = req.headers.authorization;
@@ -589,52 +585,32 @@ router.patch("/update/:id", async (req, res) => {
 
     // Get current user data before update
     const currentUser = await User.findById(id).lean();
+
     if (!currentUser) {
       return res.status(404).json({ message: "User not found" });
     }
-
-    // console.log("currentUser : ", currentUser);
 
     if (payload?.password) {
       payload.password = await bcrypt.hash(payload.password, 10);
     }
 
-    // Check if active status is being changed
-    const isActiveStatusChanged =
-      payload.hasOwnProperty("active") && currentUser.active !== payload.active;
-
-    // Check if FCM token is being updated
-    const isFcmTokenUpdated =
-      payload.hasOwnProperty("fcmToken") &&
-      currentUser.fcmToken !== payload.fcmToken;
+    const isAcceptStatusChanged =
+      payload.hasOwnProperty("allowed") &&
+      currentUser.allowed !== payload.allowed;
 
     await User.updateOne(
       { _id: id },
       { ...payload, updatedAt: new Date(), updatedBy: req?.user.id },
     );
 
-    // Send notification if active status changed
-    if (isActiveStatusChanged && payload.active) {
-      await sendActiveStatusNotification(
-        currentUser,
-        payload.active,
-        "Account Activated",
-        "Your account has been activated. You can now access all features.",
+    if (isAcceptStatusChanged && payload.allowed) {
+      await sendNotification(
+        currentUser?.fcmToken,
+        "Account Approved",
+        "Your account has been approved and activated. You can now access all features.",
       );
     }
 
-    // Send test notification if FCM token is updated
-    if (isFcmTokenUpdated && payload.fcmToken) {
-      try {
-        await sendNotification(
-          payload.fcmToken,
-          "FCM Token Updated",
-          "Your push notification token has been successfully updated.",
-        );
-      } catch (err) {
-        console.error("FCM notification error for token update:", err);
-      }
-    }
     res.status(200).json({ message: "Updated Successfully" });
   }
 });
@@ -700,13 +676,38 @@ router.patch("/approveRejectMany", async (req, res) => {
     );
 
     const notificationPromises = usersToUpdate.map(async (user) => {
-      await sendApprovalNotification(user, isAccepting);
+      await sendNotification(
+        user?.fcmToken,
+        "Account Approved",
+        "Your account has been approved and activated. You can now access all features.",
+      );
     });
 
     await Promise.all(notificationPromises);
 
     res.status(200).json({ message: "Updated Successfully" });
   }
+});
+
+router.patch("/fcmTokenUpdate/:id", async (req, res) => {
+  const { id } = req.params;
+  const payload = { ...req.body };
+
+  const currentUser = await User.findById(id).lean();
+
+  if (!currentUser) {
+    return res.status(404).json({ message: "User not found" });
+  }
+
+  if (payload?.password) {
+    payload.password = await bcrypt.hash(payload.password, 10);
+  }
+
+  await User.updateOne(
+    { _id: id },
+    { ...payload, updatedAt: new Date(), updatedBy: id },
+  );
+  res.status(200).json({ message: "Updated Successfully" });
 });
 
 router.post("/test", async (req, res) => {
@@ -716,19 +717,14 @@ router.post("/test", async (req, res) => {
     try {
       await sendNotification(
         user.fcmToken,
-        "Test",
-        "Welcome to Yuvadarpan! Your registration was successful.",
+        "Test Notification",
+        "Test Notification send and receive successfully.",
       );
-      res.status(200).json({ message: "FCM notification sent successfully" });
     } catch (err) {
-      console.error("FCM notification error:", err);
-      res.status(500).json({
-        message: "Failed to send FCM notification",
-        error: err.message,
-      });
+      console.log("FCM notification error:", err);
     }
   } else {
-    res.status(400).json({ message: "FCM token is required" });
+    console.log("FCM token is required");
   }
 });
 
