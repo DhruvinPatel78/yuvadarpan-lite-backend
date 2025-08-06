@@ -7,7 +7,7 @@ const OtpGenerator = require("otp-generator");
 const OTP = require("../models/OTP");
 const Region = require("../models/region");
 const { v4: uuidv4 } = require("uuid");
-// const { sendNotification } = require("../utils/fcm");
+const { sendNotification } = require("../utils/fcm");
 
 const verifyToken = (req, res, next) => {
   const authHeader = req.headers.authorization;
@@ -582,13 +582,35 @@ router.patch("/update/:id", async (req, res) => {
   if (!errorCheck(req, res)) {
     const { id } = req.params;
     const payload = { ...req.body };
+
+    // Get current user data before update
+    const currentUser = await User.findById(id).lean();
+
+    if (!currentUser) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
     if (payload?.password) {
       payload.password = await bcrypt.hash(payload.password, 10);
     }
+
+    const isAcceptStatusChanged =
+      payload.hasOwnProperty("allowed") &&
+      currentUser.allowed !== payload.allowed;
+
     await User.updateOne(
       { _id: id },
       { ...payload, updatedAt: new Date(), updatedBy: req?.user.id },
     );
+
+    if (isAcceptStatusChanged && payload.allowed) {
+      await sendNotification(
+        currentUser?.fcmToken,
+        "Account Approved",
+        "Your account has been approved and activated. You can now access all features.",
+      );
+    }
+
     res.status(200).json({ message: "Updated Successfully" });
   }
 });
@@ -636,18 +658,73 @@ router.patch("/forgotPassword", async (req, res) => {
 
 router.patch("/approveRejectMany", async (req, res) => {
   if (!errorCheck(req, res)) {
+    const { ids, action } = req.body;
+    const isAccepting = action === "accept";
+
+    const usersToUpdate = await User.find({ _id: { $in: ids } }).lean();
+
     await User.updateMany(
-      { _id: { $in: req.body.ids } },
+      { _id: { $in: ids } },
       {
         $set: {
-          allowed: req.body.action === "accept",
-          active: req.body.action === "accept",
+          allowed: isAccepting,
+          active: isAccepting,
           updatedAt: new Date(),
           updatedBy: req.body.id,
         },
       },
     );
+
+    const notificationPromises = usersToUpdate.map(async (user) => {
+      await sendNotification(
+        user?.fcmToken,
+        "Account Approved",
+        "Your account has been approved and activated. You can now access all features.",
+      );
+    });
+
+    await Promise.all(notificationPromises);
+
     res.status(200).json({ message: "Updated Successfully" });
+  }
+});
+
+router.patch("/fcmTokenUpdate/:id", async (req, res) => {
+  const { id } = req.params;
+  const payload = { ...req.body };
+
+  const currentUser = await User.findById(id).lean();
+
+  if (!currentUser) {
+    return res.status(404).json({ message: "User not found" });
+  }
+
+  if (payload?.password) {
+    payload.password = await bcrypt.hash(payload.password, 10);
+  }
+
+  await User.updateOne(
+    { _id: id },
+    { ...payload, updatedAt: new Date(), updatedBy: id },
+  );
+  res.status(200).json({ message: "Updated Successfully" });
+});
+
+router.post("/test", async (req, res) => {
+  const user = req.body;
+  console.log("user", user);
+  if (user.fcmToken) {
+    try {
+      await sendNotification(
+        user.fcmToken,
+        "Test Notification",
+        "Test Notification send and receive successfully.",
+      );
+    } catch (err) {
+      console.log("FCM notification error:", err);
+    }
+  } else {
+    console.log("FCM token is required");
   }
 });
 
