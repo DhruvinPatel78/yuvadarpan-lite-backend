@@ -8,6 +8,7 @@ const OTP = require("../models/OTP");
 const Region = require("../models/region");
 const { v4: uuidv4 } = require("uuid");
 const { sendNotification } = require("../utils/fcm");
+const notification = require("../data/locale/notifications.json");
 
 const verifyToken = (req, res, next) => {
   const authHeader = req.headers.authorization;
@@ -441,6 +442,11 @@ router.post("/signup", async (req, res) => {
         : emailExist
           ? "Email-is-already-exist"
           : "Mobile-is-already-exist";
+    await sendNotification(
+      user?.fcmToken,
+      notification.RegistrationFail.title.en,
+      errorMessage,
+    );
     res.status(401).json({ message: errorMessage });
   } else {
     const dbUser = await User.create({
@@ -453,6 +459,7 @@ router.post("/signup", async (req, res) => {
       active: false,
       allowed: false,
       fcmToken: user.fcmToken || null,
+      language: user.language || "en",
     });
     // if (dbUser.fcmToken) {
     //   try {
@@ -604,10 +611,11 @@ router.patch("/update/:id", async (req, res) => {
     );
 
     if (isAcceptStatusChanged && payload.allowed) {
+      let lang = currentUser.language;
       await sendNotification(
         currentUser?.fcmToken,
-        "Account Approved",
-        "Your account has been approved and activated. You can now access all features.",
+        notification.AccountVerifySuccess.title[lang],
+        notification.AccountVerifySuccess.body[lang],
       );
     }
 
@@ -678,8 +686,8 @@ router.patch("/approveRejectMany", async (req, res) => {
     const notificationPromises = usersToUpdate.map(async (user) => {
       await sendNotification(
         user?.fcmToken,
-        "Account Approved",
-        "Your account has been approved and activated. You can now access all features.",
+        notification.AccountVerifySuccess.title[lang],
+        notification.AccountVerifySuccess.body[lang],
       );
     });
 
@@ -707,7 +715,7 @@ router.patch("/fcmTokenUpdate/:id", async (req, res) => {
     { _id: id },
     { ...payload, updatedAt: new Date(), updatedBy: id },
   );
-  res.status(200).json({ message: "Updated Successfully" });
+  res.status(200).json({ message: "fcmToken Updated Successfully" });
 });
 
 router.post("/test", async (req, res) => {

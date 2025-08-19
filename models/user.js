@@ -45,10 +45,7 @@ const userSchema = new mongoose.Schema({
     type: String,
     required: true,
   },
-  // deviceId: {
-  //   type: String,
-  //   required: true,
-  // },
+  language: String,
   active: Boolean,
   allowed: Boolean,
   role: String,
