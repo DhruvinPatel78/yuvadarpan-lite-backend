@@ -1,0 +1,28 @@
+{
+  "AccountVerifySuccess": {
+    "title": {
+      "en": "Account Verification Success",
+      "gu": "એકાઉન્ટ ચકાસણી સફળ થઈ."
+    },
+    "body": {
+      "en": "Now you can signin and use Yuvadarpan.",
+      "gu": "હવે તમે લોગ ઇન કરી શકો છો અને યુવાદર્પણનો ઉપયોગ કરી શકો છો."
+    }
+  },
+  "AccountVerifyFail": {
+    "title": {
+      "en": "",
+      "gu": ""
+    },
+    "body": {
+      "en": "",
+      "gu": ""
+    }
+  },
+  "RegistrationFail": {
+    "title": {
+      "en": "Account Already Exist",
+      "gu": "ખાતું પહેલેથી જ અસ્તિત્વમાં છે."
+    }
+  }
+}
