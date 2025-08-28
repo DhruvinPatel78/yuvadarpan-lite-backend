@@ -142,7 +142,7 @@ router.get("/list", async (req, res) => {
     };
     if (role === "ADMIN") {
       const users = await User.find({ ...filterSearch })
-        .sort({ _id: -1 })
+        .sort({ id: -1 })
         .skip(offset)
         .limit(limit)
         .exec();
@@ -158,7 +158,7 @@ router.get("/list", async (req, res) => {
           region: { $eq: mangerRegion?.region },
           ...filterSearch,
         })
-          .sort({ _id: -1 })
+          .sort({ id: -1 })
           .skip(offset)
           .limit(limit)
           .exec();
@@ -181,7 +181,7 @@ router.get("/list", async (req, res) => {
           localSamaj: { $eq: mangerSamaj?.localSamaj },
           ...filterSearch,
         })
-          .sort({ _id: -1 })
+          .sort({ id: -1 })
           .skip(offset)
           .limit(limit)
           .exec();
@@ -295,7 +295,7 @@ router.get("/requests", async (req, res) => {
         active: true,
         ...filterSearch,
       })
-        .sort({ _id: -1 })
+        .sort({ id: -1 })
         .skip(offset)
         .limit(limit)
         .exec();
@@ -317,7 +317,7 @@ router.get("/requests", async (req, res) => {
           region: { $eq: mangerRegion?.region },
           ...filterSearch,
         })
-          .sort({ _id: -1 })
+          .sort({ id: -1 })
           .skip(offset)
           .limit(limit)
           .exec();
@@ -344,7 +344,7 @@ router.get("/requests", async (req, res) => {
           localSamaj: { $eq: mangerSamaj?.localSamaj },
           ...filterSearch,
         })
-          .sort({ _id: -1 })
+          .sort({ id: -1 })
           .skip(offset)
           .limit(limit)
           .exec();
@@ -442,11 +442,13 @@ router.post("/signup", async (req, res) => {
         : emailExist
           ? "Email-is-already-exist"
           : "Mobile-is-already-exist";
-    await sendNotification(
+
+      user?.fcmToken && await sendNotification(
       user?.fcmToken,
       notification.RegistrationFail.title.en,
       errorMessage,
     );
+
     res.status(401).json({ message: errorMessage });
   } else {
     const dbUser = await User.create({
@@ -606,11 +608,11 @@ router.patch("/update/:id", async (req, res) => {
       currentUser.allowed !== payload.allowed;
 
     await User.updateOne(
-      { _id: id },
+      { id: id },
       { ...payload, updatedAt: new Date(), updatedBy: req?.user.id },
     );
 
-    if (isAcceptStatusChanged && payload.allowed) {
+    if (isAcceptStatusChanged && currentUser?.fcmToken && payload.allowed) {
       let lang = currentUser.language;
       await sendNotification(
         currentUser?.fcmToken,
@@ -669,10 +671,10 @@ router.patch("/approveRejectMany", async (req, res) => {
     const { ids, action } = req.body;
     const isAccepting = action === "accept";
 
-    const usersToUpdate = await User.find({ _id: { $in: ids } }).lean();
+    const usersToUpdate = await User.find({ id: { $in: ids } }).lean();
 
     await User.updateMany(
-      { _id: { $in: ids } },
+      { id: { $in: ids } },
       {
         $set: {
           allowed: isAccepting,
@@ -712,7 +714,7 @@ router.patch("/fcmTokenUpdate/:id", async (req, res) => {
   }
 
   await User.updateOne(
-    { _id: id },
+    { id: id },
     { ...payload, updatedAt: new Date(), updatedBy: id },
   );
   res.status(200).json({ message: "fcmToken Updated Successfully" });
