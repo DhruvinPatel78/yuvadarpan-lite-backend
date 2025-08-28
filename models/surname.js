@@ -22,6 +22,15 @@ const surNameSchema = new mongoose.Schema({
   updatedAt: Date,
   createdBy: String,
   updatedBy: String,
+}, {
+    toJSON: {
+        virtuals: true,
+        transform: (doc, ret) => {
+            ret.id = ret._id;
+            delete ret._id;
+            return ret;
+        }
+    }
 });
 
 const Surname = mongoose.model("Surname", surNameSchema);
