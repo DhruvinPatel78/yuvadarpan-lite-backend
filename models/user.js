@@ -45,10 +45,7 @@ const userSchema = new mongoose.Schema({
     type: String,
     required: true,
   },
-  // deviceId: {
-  //   type: String,
-  //   required: true,
-  // },
+  language: String,
   active: Boolean,
   allowed: Boolean,
   role: String,
@@ -58,6 +55,15 @@ const userSchema = new mongoose.Schema({
   gender: String,
   updatedBy: String,
   fcmToken: { type: String },
+}, {
+    toJSON: {
+        virtuals: true,
+        transform: (doc, ret) => {
+            ret.id = ret._id;
+            delete ret._id;
+            return ret;
+        }
+    }
 });
 
 const User = mongoose.model("User", userSchema);
