@@ -11,12 +11,12 @@
   },
   "AccountVerifyFail": {
     "title": {
-      "en": "",
-      "gu": ""
+      "en": "Account Verification Fail",
+      "gu": "એકાઉન્ટ ચકાસણી નિષ્ફળ ગઈ"
     },
     "body": {
-      "en": "",
-      "gu": ""
+      "en": "Verification required. Please get in touch with the contact support.",
+      "gu": "ચકાસણી જરૂરી છે. કૃપા કરીને સપોર્ટનો સંપર્ક કરો."
     }
   },
   "RegistrationFail": {
