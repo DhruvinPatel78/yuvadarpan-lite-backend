@@ -568,14 +568,16 @@ router.post("/signIn", async (req, res) => {
     if (passwordMatched) {
       if (dbUser?.allowed) {
         const token = jwt.sign(
-          { email: dbUser.email, role: dbUser.role, id: dbUser.id },
+          { email: dbUser.email, role: dbUser.role, id: dbUser._id },
           process.env.JWT_SECRET,
           {
             expiresIn: "30d",
           },
         );
-        delete dbUser.password;
-        res.send({ data: dbUser, token });
+        const { password, ...rest } = dbUser;
+        const safeUser = { ...rest, id: dbUser._id };
+        delete safeUser._id;
+        res.send({ data: safeUser, token });
       } else {
         res.status(403).send({ message: "your-account-is-not-verified" });
       }
@@ -608,16 +610,16 @@ router.patch("/update/:id", async (req, res) => {
       currentUser.allowed !== payload.allowed;
 
     await User.updateOne(
-      { id: id },
+      { _id: id },
       { ...payload, updatedAt: new Date(), updatedBy: req?.user.id },
     );
 
-    if (isAcceptStatusChanged && currentUser?.fcmToken && payload.allowed) {
-      let lang = currentUser.language;
+    if (isAcceptStatusChanged && currentUser?.fcmToken) {
+      let lang = currentUser?.language;
       await sendNotification(
         currentUser?.fcmToken,
-        notification.AccountVerifySuccess.title[lang],
-        notification.AccountVerifySuccess.body[lang],
+        payload?.allowed ? notification.AccountVerifySuccess.title[lang] : notification.AccountVerifyFail.title[lang],
+        payload?.allowed ? notification.AccountVerifySuccess.body[lang] : notification.AccountVerifyFail.body[lang],
       );
     }
 
@@ -628,7 +630,7 @@ router.patch("/update/:id", async (req, res) => {
 router.delete("/delete", async (req, res) => {
   if (!errorCheck(req, res)) {
     const data = req.body;
-    await User.deleteMany({ id: { $in: data.users } });
+    await User.deleteMany({ _id: { $in: data.users } });
     res.status(200).json({ message: "Delete Successfully" });
   }
 });
@@ -671,10 +673,10 @@ router.patch("/approveRejectMany", async (req, res) => {
     const { ids, action } = req.body;
     const isAccepting = action === "accept";
 
-    const usersToUpdate = await User.find({ id: { $in: ids } }).lean();
+    const usersToUpdate = await User.find({ _id: { $in: ids } }).lean();
 
     await User.updateMany(
-      { id: { $in: ids } },
+      { _id: { $in: ids } },
       {
         $set: {
           allowed: isAccepting,
@@ -686,10 +688,11 @@ router.patch("/approveRejectMany", async (req, res) => {
     );
 
     const notificationPromises = usersToUpdate.map(async (user) => {
+      const lang = user?.language;
       await sendNotification(
         user?.fcmToken,
-        notification.AccountVerifySuccess.title[lang],
-        notification.AccountVerifySuccess.body[lang],
+        isAccepting ? notification.AccountVerifySuccess.title[lang] : notification.AccountVerifyFail.title[lang],
+        isAccepting ? notification.AccountVerifySuccess.body[lang] : notification.AccountVerifyFail.body[lang],
       );
     });
 
@@ -714,7 +717,7 @@ router.patch("/fcmTokenUpdate/:id", async (req, res) => {
   }
 
   await User.updateOne(
-    { id: id },
+    { _id: id },
     { ...payload, updatedAt: new Date(), updatedBy: id },
   );
   res.status(200).json({ message: "fcmToken Updated Successfully" });
