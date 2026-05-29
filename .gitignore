@@ -4,3 +4,8 @@ yarn.lock
 .idea
 .netlify
 utils/serviceAccountKey.json
+.pnp.cjs
+.pnp.loader.mjs
+.yarn/unplugged
+.yarn/build-state.yml
+.yarn/install-state.gz
