@@ -159,7 +159,13 @@ router.get("/list", async (req, res) => {
 router.get("/get-all-list", async (req, res) => {
   if (!errorCheck(req, res)) {
     const {id, role} = req.user;
-    if (role === "ADMIN") {
+    if(role === "USER") {
+      const dbYuva = await Yuvalist.find({
+        active: { $eq: true }
+      });
+      res.status(200).json(dbYuva);
+    }
+    else if (role === "ADMIN") {
       const dbYuva = await Yuvalist.find();
       res.status(200).json(dbYuva);
     }else if (role === "REGION_MANAGER") {
