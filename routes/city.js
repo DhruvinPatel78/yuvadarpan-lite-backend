@@ -1,7 +1,18 @@
 const express = require("express");
 const router = express.Router();
 const City = require("../models/city");
+const District = require("../models/district");
+const Samaj = require("../models/samaj");
 const jwt = require("jsonwebtoken");
+const {
+  attachChildCounts,
+  findChildrenByParent,
+  findByAnyId,
+  idOrObjectIdFilter,
+  idsFilter,
+  sanitizeUpdatePayload,
+} = require("../utils/childCount");
+const { rejectSamajManagerWrite } = require("../utils/managerScope");
 
 const privateRoutes = ["POST", "DELETE", "PATCH"];
 
@@ -98,9 +109,10 @@ router.get("/list", async (req, res) => {
     ...District,
   };
   const Cities = await City.find(filter).skip(offset).limit(limit).exec();
+  const data = await attachChildCounts(Cities, Samaj, "city_id", "samajCount");
   const totalItems = await City.countDocuments(filter);
   const totalPages = Math.ceil(totalItems / limit);
-  res.status(200).json({ total: totalItems, page, totalPages, data: Cities });
+  res.status(200).json({ total: totalItems, page, totalPages, data });
 });
 router.get("/get-all-list", async (req, res) => {
   const { data = [] } = req.query;
@@ -117,10 +129,14 @@ router.get("/get-all-list", async (req, res) => {
 // Get cities by district id
 router.get("/list/:id", async (req, res) => {
   const { id } = req.params;
-  const CityData = await City.find({
-    district_id: { $eq: id },
-  });
-  res.status(200).json(CityData);
+  const CityData = await findChildrenByParent(
+    District,
+    City,
+    id,
+    "district_id"
+  );
+  const data = await attachChildCounts(CityData, Samaj, "city_id", "samajCount");
+  res.status(200).json(data);
 });
 
 // Get cities by region id
@@ -134,7 +150,7 @@ router.get("/listByRegion/:id", async (req, res) => {
 
 // Add new city
 router.post("/add", async (req, res) => {
-  if (!errorCheck(req, res)) {
+  if (!errorCheck(req, res) && !rejectSamajManagerWrite(req, res)) {
     const data = req.body;
     const dbCity = await City.create({
       ...data,
@@ -151,29 +167,26 @@ router.post("/add", async (req, res) => {
 
 //  Delete cities by city ids
 router.delete("/delete", async (req, res) => {
-  if (!errorCheck(req, res)) {
+  if (!errorCheck(req, res) && !rejectSamajManagerWrite(req, res)) {
     const data = req.body;
-    await City.deleteMany({ id: { $in: data.cities } });
+    await City.deleteMany(idsFilter(data.cities));
     res.status(200).json({ message: "Delete Successfully" });
   }
 });
 
 router.get("/getInfo/:id", async (req, res) => {
-  const { id } = req.params;
-  const CityData = await City.find({
-    id: { $eq: id },
-  });
+  const CityData = await findByAnyId(City, req.params.id);
   res.status(200).json(CityData);
 });
 
 // Update City by city id
 router.patch("/update/:id", async (req, res) => {
-  if (!errorCheck(req, res)) {
+  if (!errorCheck(req, res) && !rejectSamajManagerWrite(req, res)) {
     const { id } = req.params;
     const payload = { ...req.body };
     await City.updateOne(
-      { id: id },
-      { ...payload, updatedAt: new Date(), updatedBy: req?.user.id }
+      idOrObjectIdFilter(id),
+      { ...sanitizeUpdatePayload(payload), updatedAt: new Date(), updatedBy: req?.user.id }
     );
     res.status(200).json({ message: "Updated Successfully" });
   }

@@ -2,6 +2,7 @@ const express = require("express");
 const router = express.Router();
 const Role = require("../models/role");
 const jwt = require("jsonwebtoken");
+const { rejectSamajManagerWrite } = require("../utils/managerScope");
 
 const privateRoutes = ["POST", "DELETE", "PATCH"];
 
@@ -75,7 +76,7 @@ router.get("/get-all-list", async (req, res) => {
 
 // Add new country
 router.post("/add", async (req, res) => {
-  if (!errorCheck(req, res)) {
+  if (!errorCheck(req, res) && !rejectSamajManagerWrite(req, res)) {
     const data = req.body;
     const dbRole = await Role.create({
       ...data,
@@ -92,7 +93,7 @@ router.post("/add", async (req, res) => {
 
 // Delete countries by country ids
 router.delete("/delete", async (req, res) => {
-  if (!errorCheck(req, res)) {
+  if (!errorCheck(req, res) && !rejectSamajManagerWrite(req, res)) {
     const data = req.body;
     await Role.deleteMany({ id: { $in: data?.Roles } });
     res.status(200).json({ message: "Delete Successfully" });
@@ -110,7 +111,7 @@ router.get("/getInfo/:id", async (req, res) => {
 });
 
 router.patch("/update/:id", async (req, res) => {
-  if (!errorCheck(req, res)) {
+  if (!errorCheck(req, res) && !rejectSamajManagerWrite(req, res)) {
     const { id } = req.params;
     const payload = { ...req.body };
     await Role.updateOne(

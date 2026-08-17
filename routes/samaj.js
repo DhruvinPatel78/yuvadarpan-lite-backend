@@ -1,7 +1,10 @@
 const express = require("express");
 const router = express.Router();
 const Samaj = require("../models/samaj");
+const City = require("../models/city");
 const jwt = require("jsonwebtoken");
+const { findChildrenByParent, findByAnyId, idOrObjectIdFilter, idsFilter, sanitizeUpdatePayload } = require("../utils/childCount");
+const { rejectSamajManagerWrite } = require("../utils/managerScope");
 
 const privateRoutes = ["POST", "DELETE", "PATCH"];
 
@@ -117,9 +120,7 @@ router.get("/get-all-list", async (req, res) => {
 // Get samaj by city id
 router.get("/list/:id", async (req, res) => {
   const { id } = req.params;
-  const SamajData = await Samaj.find({
-    city_id: { $eq: id },
-  });
+  const SamajData = await findChildrenByParent(City, Samaj, id, "city_id");
   res.status(200).json(SamajData);
 });
 
@@ -143,7 +144,7 @@ router.get("/listByRegion/:id", async (req, res) => {
 
 //  Add new samaj
 router.post("/add", async (req, res) => {
-  if (!errorCheck(req, res)) {
+  if (!errorCheck(req, res) && !rejectSamajManagerWrite(req, res)) {
     const data = req.body;
     const dbSamaj = await Samaj.create({
       ...data,
@@ -160,30 +161,27 @@ router.post("/add", async (req, res) => {
 
 // Delete samaj by samaj ids
 router.delete("/delete", async (req, res) => {
-  if (!errorCheck(req, res)) {
+  if (!errorCheck(req, res) && !rejectSamajManagerWrite(req, res)) {
     const data = req.body;
-    await Samaj.deleteMany({ id: { $in: data.samaj } });
+    await Samaj.deleteMany(idsFilter(data.samaj));
     res.status(200).json({ message: "Delete Successfully" });
   }
 });
 
 //  Get samaj info by samaj id
 router.get("/getInfo/:id", async (req, res) => {
-  const { id } = req.params;
-  const SamajData = await Samaj.find({
-    id: { $eq: id },
-  });
+  const SamajData = await findByAnyId(Samaj, req.params.id);
   res.status(200).json(SamajData);
 });
 
 // Update Samaj by samaj id
 router.patch("/update/:id", async (req, res) => {
-  if (!errorCheck(req, res)) {
+  if (!errorCheck(req, res) && !rejectSamajManagerWrite(req, res)) {
     const { id } = req.params;
     const payload = { ...req.body };
     await Samaj.updateOne(
-      { id: id },
-      { ...payload, updatedAt: new Date(), updatedBy: req?.user.id }
+      idOrObjectIdFilter(id),
+      { ...sanitizeUpdatePayload(payload), updatedAt: new Date(), updatedBy: req?.user.id }
     );
     res.status(200).json({ message: "Updated Successfully" });
   }

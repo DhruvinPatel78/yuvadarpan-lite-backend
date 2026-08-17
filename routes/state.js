@@ -1,7 +1,18 @@
 const express = require("express");
 const router = express.Router();
 const State = require("../models/state");
+const Country = require("../models/country");
+const Region = require("../models/region");
 const jwt = require("jsonwebtoken");
+const {
+  attachChildCounts,
+  findChildrenByParent,
+  findByAnyId,
+  idOrObjectIdFilter,
+  idsFilter,
+  sanitizeUpdatePayload,
+} = require("../utils/childCount");
+const { rejectSamajManagerWrite } = require("../utils/managerScope");
 
 const privateRoutes = ["POST", "DELETE", "PATCH"];
 
@@ -71,9 +82,15 @@ router.get("/list", async (req, res) => {
     ...Name,
   };
   const States = await State.find(filter).skip(offset).limit(limit).exec();
+  const data = await attachChildCounts(
+    States,
+    Region,
+    "state_id",
+    "regionCount"
+  );
   const totalItems = await State.countDocuments(filter);
   const totalPages = Math.ceil(totalItems / limit);
-  res.status(200).json({ total: totalItems, page, totalPages, data: States });
+  res.status(200).json({ total: totalItems, page, totalPages, data });
 });
 router.get("/get-all-list", async (req, res) => {
   const { data = [] } = req.query;
@@ -90,15 +107,24 @@ router.get("/get-all-list", async (req, res) => {
 // Get states by country id
 router.get("/list/:id", async (req, res) => {
   const { id } = req.params;
-  const States = await State.find({
-    country_id: { $eq: id },
-  });
-  res.status(200).json(States);
+  const States = await findChildrenByParent(
+    Country,
+    State,
+    id,
+    "country_id"
+  );
+  const data = await attachChildCounts(
+    States,
+    Region,
+    "state_id",
+    "regionCount"
+  );
+  res.status(200).json(data);
 });
 
 // Add new state
 router.post("/add", async (req, res) => {
-  if (!errorCheck(req, res)) {
+  if (!errorCheck(req, res) && !rejectSamajManagerWrite(req, res)) {
     const data = req.body;
     const dbState = await State.create({
       ...data,
@@ -115,30 +141,27 @@ router.post("/add", async (req, res) => {
 
 // Delete states by state ids
 router.delete("/delete", async (req, res) => {
-  if (!errorCheck(req, res)) {
+  if (!errorCheck(req, res) && !rejectSamajManagerWrite(req, res)) {
     const data = req.body;
-    await State.deleteMany({ id: { $in: data.states } });
+    await State.deleteMany(idsFilter(data.states));
     res.status(200).json({ message: "Delete Successfully" });
   }
 });
 
 // Get state info by state id
 router.get("/getInfo/:id", async (req, res) => {
-  const { id } = req.params;
-  const StateData = await State.find({
-    id: { $eq: id },
-  });
+  const StateData = await findByAnyId(State, req.params.id);
   res.status(200).json(StateData);
 });
 
 // Update state by state id
 router.patch("/update/:id", async (req, res) => {
-  if (!errorCheck(req, res)) {
+  if (!errorCheck(req, res) && !rejectSamajManagerWrite(req, res)) {
     const { id } = req.params;
     const payload = { ...req.body };
     await State.updateOne(
-      { id: id },
-      { ...payload, updatedAt: new Date(), updatedBy: req?.user.id }
+      idOrObjectIdFilter(id),
+      { ...sanitizeUpdatePayload(payload), updatedAt: new Date(), updatedBy: req?.user.id }
     );
     res.status(200).json({ message: "Updated Successfully" });
   }

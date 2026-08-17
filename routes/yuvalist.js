@@ -4,6 +4,14 @@ const router = express.Router();
 const Yuvalist = require("../models/yuvalist");
 const User = require("../models/user");
 const { v4: uuidv4 } = require('uuid');
+const { idsFilter, idOrObjectIdFilter, sanitizeUpdatePayload } = require("../utils/childCount");
+const { deleteYuvaImages } = require("../utils/s3");
+const { getPublicYuvaById } = require("../utils/yuvaPublic");
+const {
+  findAccountByTokenId,
+  samajValueKeys,
+  isOwnSamajQuery,
+} = require("../utils/managerScope");
 
 const verifyToken = (req, res, next) => {
   const authHeader = req.headers.authorization;
@@ -32,6 +40,18 @@ const verifyToken = (req, res, next) => {
   }
   next();
 };
+
+router.get("/public/:id", async (req, res) => {
+  try {
+    const yuva = await getPublicYuvaById(req.params.id);
+    if (!yuva) {
+      return res.status(404).json({ message: "yuva-not-found" });
+    }
+    res.status(200).json(yuva);
+  } catch (e) {
+    res.status(500).json({ message: "failed-to-fetch" });
+  }
+});
 
 router.use(verifyToken);
 
@@ -131,19 +151,33 @@ router.get("/list", async (req, res) => {
         });
       }
     } else if (role === "SAMAJ_MANAGER") {
-      const mangerSamaj = await User.findById(id);
-      if (mangerSamaj?.localSamaj) {
-        const MangerYuvas = await Yuvalist.find({
-          localSamaj: { $eq: mangerSamaj?.localSamaj },
+      const ownSamaj = isOwnSamajQuery(req.query);
+      if (!ownSamaj) {
+        const yuvas = await Yuvalist.find({
           ...filterSearch,
         })
           .skip(offset)
           .limit(limit)
           .exec();
-        const managerTotalItem = await Yuvalist.find({
-          localSamaj: { $eq: mangerSamaj?.localSamaj },
+        const totalItems = await Yuvalist.countDocuments({
           ...filterSearch,
-        }).countDocuments({});
+        });
+        const totalPages = Math.ceil(totalItems / limit);
+        res
+          .status(200)
+          .json({ total: totalItems, page, totalPages, data: yuvas });
+      } else {
+        const mangerSamaj = await findAccountByTokenId(id);
+        const samajKeys = await samajValueKeys(mangerSamaj?.localSamaj);
+        const managerQuery = {
+          ...filterSearch,
+          localSamaj: { $in: samajKeys },
+        };
+        const MangerYuvas = await Yuvalist.find(managerQuery)
+          .skip(offset)
+          .limit(limit)
+          .exec();
+        const managerTotalItem = await Yuvalist.countDocuments(managerQuery);
         const totalPages = Math.ceil(managerTotalItem / limit);
         res.status(200).json({
           total: managerTotalItem,
@@ -205,7 +239,14 @@ router.get("/citylist", async (req, res) => {
 router.post("/addYuvaList", async (req, res) => {
   const data = req.body;
   const user = req.user;
-  if (user.role === "ADMIN") {
+  if (user.role === "ADMIN" || user.role === "SAMAJ_MANAGER") {
+    if (user.role === "SAMAJ_MANAGER") {
+      const manager = await findAccountByTokenId(user.id);
+      if (!manager?.localSamaj) {
+        return res.status(403).send({ message: "samaj-not-assigned" });
+      }
+      data.localSamaj = manager.localSamaj;
+    }
     const dbYuvaList = await Yuvalist.create({
       ...data,
       // id: crypto.randomUUID().replace(/-/g, ""),
@@ -222,16 +263,64 @@ router.post("/addYuvaList", async (req, res) => {
   }
 });
 
+const deleteYuvaRecords = async (filter) => {
+  const docs = await Yuvalist.find(filter).lean();
+  await Yuvalist.deleteMany(filter);
+  try {
+    await deleteYuvaImages(docs);
+  } catch (e) {
+    console.error("Failed to delete yuva images from S3", e);
+  }
+};
+
+router.delete("/delete", async (req, res) => {
+  if (!errorCheck(req, res)) {
+    const ids = req.body?.ids || [];
+    let filter = idsFilter(ids);
+    if (req.user.role === "SAMAJ_MANAGER") {
+      const manager = await findAccountByTokenId(req.user.id);
+      const samajKeys = await samajValueKeys(manager?.localSamaj);
+      filter = { $and: [filter, { localSamaj: { $in: samajKeys } }] };
+    }
+    await deleteYuvaRecords(filter);
+    res.status(200).json({ message: "Delete Successfully" });
+  }
+});
+
 router.delete("/:id", async (req, res) => {
   if (!errorCheck(req, res)) {
-    await Yuvalist.deleteOne({ id: { $in: req.params.id } });
+    let filter = idOrObjectIdFilter(req.params.id);
+    if (req.user.role === "SAMAJ_MANAGER") {
+      const manager = await findAccountByTokenId(req.user.id);
+      const samajKeys = await samajValueKeys(manager?.localSamaj);
+      filter = { $and: [filter, { localSamaj: { $in: samajKeys } }] };
+    }
+    await deleteYuvaRecords(filter);
     res.status(200).json({ message: "Delete Successfully" });
   }
 });
 
 router.patch("/update/:id", async (req, res) => {
   if (!errorCheck(req, res)) {
-    await Yuvalist.updateOne({ id: req.body.id }, { ...req.body });
+    const { id } = req.params;
+    let filter = idOrObjectIdFilter(id);
+    if (req.user.role === "SAMAJ_MANAGER") {
+      const manager = await findAccountByTokenId(req.user.id);
+      const samajKeys = await samajValueKeys(manager?.localSamaj);
+      filter = { $and: [filter, { localSamaj: { $in: samajKeys } }] };
+      const allowed = await Yuvalist.findOne(filter);
+      if (!allowed) {
+        return res.status(403).json({ message: "not-allowed" });
+      }
+    }
+    await Yuvalist.updateOne(
+      filter,
+      {
+        ...sanitizeUpdatePayload(req.body),
+        updatedAt: new Date(),
+        updatedBy: req?.user?.id,
+      },
+    );
     res.status(200).json({ message: "Updated Successfully" });
   }
 });

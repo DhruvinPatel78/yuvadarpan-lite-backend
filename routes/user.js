@@ -9,6 +9,11 @@ const Region = require("../models/region");
 const { v4: uuidv4 } = require("uuid");
 const { sendNotification } = require("../utils/fcm");
 const notification = require("../data/locale/notifications.json");
+const { idOrObjectIdFilter } = require("../utils/childCount");
+const {
+  findAccountByTokenId,
+  samajValueKeys,
+} = require("../utils/managerScope");
 
 const verifyToken = (req, res, next) => {
   const authHeader = req.headers.authorization;
@@ -175,20 +180,33 @@ router.get("/list", async (req, res) => {
         });
       }
     } else if (role === "SAMAJ_MANAGER") {
-      const mangerSamaj = await User.findById(id);
-      if (mangerSamaj?.localSamaj) {
-        const MangerUsers = await User.find({
-          localSamaj: { $eq: mangerSamaj?.localSamaj },
-          ...filterSearch,
-        })
+      const ownSamaj =
+        req.query.ownSamaj === true ||
+        String(req.query.ownSamaj).toLowerCase() === "true";
+      if (!ownSamaj) {
+        const users = await User.find({ ...filterSearch })
           .sort({ id: -1 })
           .skip(offset)
           .limit(limit)
           .exec();
-        const managerTotalItem = await User.find({
-          localSamaj: { $eq: mangerSamaj?.localSamaj },
+        const totalItems = await User.countDocuments({ ...filterSearch });
+        const totalPages = Math.ceil(totalItems / limit);
+        res
+          .status(200)
+          .json({ total: totalItems, page, totalPages, data: users });
+      } else {
+        const mangerSamaj = await findAccountByTokenId(id);
+        const samajKeys = await samajValueKeys(mangerSamaj?.localSamaj);
+        const managerQuery = {
           ...filterSearch,
-        }).countDocuments({});
+          localSamaj: { $in: samajKeys },
+        };
+        const MangerUsers = await User.find(managerQuery)
+          .sort({ id: -1 })
+          .skip(offset)
+          .limit(limit)
+          .exec();
+        const managerTotalItem = await User.countDocuments(managerQuery);
         const totalPages = Math.ceil(managerTotalItem / limit);
         res.status(200).json({
           total: managerTotalItem,
@@ -289,21 +307,18 @@ router.get("/requests", async (req, res) => {
       ...Email,
       ...Roles,
     };
+    const pendingQuery = {
+      allowed: { $eq: false },
+      $or: [{ active: true }, { updatedAt: null }],
+      ...filterSearch,
+    };
     if (role === "ADMIN") {
-      const users = await User.find({
-        allowed: { $eq: false },
-        active: true,
-        ...filterSearch,
-      })
+      const users = await User.find(pendingQuery)
         .sort({ id: -1 })
         .skip(offset)
         .limit(limit)
         .exec();
-      const totalItems = await User.find({
-        allowed: { $eq: false },
-        active: true,
-        ...filterSearch,
-      }).countDocuments({});
+      const totalItems = await User.countDocuments(pendingQuery);
       const totalPages = Math.ceil(totalItems / limit);
       res
         .status(200)
@@ -311,22 +326,16 @@ router.get("/requests", async (req, res) => {
     } else if (role === "REGION_MANAGER") {
       const mangerRegion = await User.findById(id);
       if (mangerRegion?.region) {
-        const MangerUsers = await User.find({
-          allowed: { $eq: false },
-          active: true,
+        const managerPendingQuery = {
+          ...pendingQuery,
           region: { $eq: mangerRegion?.region },
-          ...filterSearch,
-        })
+        };
+        const MangerUsers = await User.find(managerPendingQuery)
           .sort({ id: -1 })
           .skip(offset)
           .limit(limit)
           .exec();
-        const managerTotalItem = await User.find({
-          allowed: { $eq: false },
-          active: true,
-          region: { $eq: mangerRegion?.region },
-          ...filterSearch,
-        }).countDocuments({});
+        const managerTotalItem = await User.countDocuments(managerPendingQuery);
         const totalPages = Math.ceil(managerTotalItem / limit);
         res.status(200).json({
           total: managerTotalItem,
@@ -336,32 +345,25 @@ router.get("/requests", async (req, res) => {
         });
       }
     } else if (role === "SAMAJ_MANAGER") {
-      const mangerSamaj = await User.findById(id);
-      if (mangerSamaj?.localSamaj) {
-        const MangerUsers = await User.find({
-          allowed: { $eq: false },
-          active: true,
-          localSamaj: { $eq: mangerSamaj?.localSamaj },
-          ...filterSearch,
-        })
-          .sort({ id: -1 })
-          .skip(offset)
-          .limit(limit)
-          .exec();
-        const managerTotalItem = await User.find({
-          allowed: { $eq: false },
-          active: true,
-          localSamaj: { $eq: mangerSamaj?.localSamaj },
-          ...filterSearch,
-        }).countDocuments({});
-        const totalPages = Math.ceil(managerTotalItem / limit);
-        res.status(200).json({
-          total: managerTotalItem,
-          page,
-          totalPages,
-          data: MangerUsers,
-        });
-      }
+      const mangerSamaj = await findAccountByTokenId(id);
+      const samajKeys = await samajValueKeys(mangerSamaj?.localSamaj);
+      const managerPendingQuery = {
+        ...pendingQuery,
+        localSamaj: { $in: samajKeys },
+      };
+      const MangerUsers = await User.find(managerPendingQuery)
+        .sort({ id: -1 })
+        .skip(offset)
+        .limit(limit)
+        .exec();
+      const managerTotalItem = await User.countDocuments(managerPendingQuery);
+      const totalPages = Math.ceil(managerTotalItem / limit);
+      res.status(200).json({
+        total: managerTotalItem,
+        page,
+        totalPages,
+        data: MangerUsers,
+      });
     }
   }
 });
@@ -392,6 +394,9 @@ router.post("/add", async (req, res) => {
             : "Mobile-is-already-exist";
       res.status(401).json({ message: errorMessage });
     } else {
+      if (req.user.role === "SAMAJ_MANAGER") {
+        user.role = "USER";
+      }
       const dbUser = await User.create({
         ...user,
         id: uuidv4().replace(/-/g, ""),
@@ -458,7 +463,7 @@ router.post("/signup", async (req, res) => {
       updatedAt: null,
       createdBy: null,
       updatedBy: null,
-      active: false,
+      active: true,
       allowed: false,
       fcmToken: user.fcmToken || null,
       language: user.language || "en",
@@ -601,6 +606,15 @@ router.patch("/update/:id", async (req, res) => {
       return res.status(404).json({ message: "User not found" });
     }
 
+    if (req.user.role === "SAMAJ_MANAGER") {
+      const manager = await findAccountByTokenId(req.user.id);
+      const samajKeys = await samajValueKeys(manager?.localSamaj);
+      if (!samajKeys.includes(String(currentUser.localSamaj))) {
+        return res.status(403).json({ message: "not-allowed" });
+      }
+      delete payload.role;
+    }
+
     if (payload?.password) {
       payload.password = await bcrypt.hash(payload.password, 10);
     }
@@ -630,7 +644,12 @@ router.patch("/update/:id", async (req, res) => {
 router.delete("/delete", async (req, res) => {
   if (!errorCheck(req, res)) {
     const data = req.body;
-    await User.deleteMany({ _id: { $in: data.users } });
+    const query = { _id: { $in: data.users } };
+    if (req.user.role === "SAMAJ_MANAGER") {
+      const manager = await findAccountByTokenId(req.user.id);
+      query.localSamaj = { $in: await samajValueKeys(manager?.localSamaj) };
+    }
+    await User.deleteMany(query);
     res.status(200).json({ message: "Delete Successfully" });
   }
 });
@@ -673,11 +692,15 @@ router.patch("/approveRejectMany", async (req, res) => {
     const { ids, action } = req.body;
     const isAccepting = action === "accept";
 
-    const usersToUpdate = await User.find({ _id: { $in: ids } }).lean();
+    const query = { _id: { $in: ids } };
+    if (req.user.role === "SAMAJ_MANAGER") {
+      const manager = await findAccountByTokenId(req.user.id);
+      query.localSamaj = { $in: await samajValueKeys(manager?.localSamaj) };
+    }
 
-    await User.updateMany(
-      { _id: { $in: ids } },
-      {
+    const usersToUpdate = await User.find(query).lean();
+
+    await User.updateMany(query, {
         $set: {
           allowed: isAccepting,
           active: isAccepting,

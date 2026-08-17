@@ -1,7 +1,18 @@
 const express = require("express");
 const router = express.Router();
 const Region = require("../models/region");
+const State = require("../models/state");
+const District = require("../models/district");
 const jwt = require("jsonwebtoken");
+const {
+  attachChildCounts,
+  findChildrenByParent,
+  findByAnyId,
+  idOrObjectIdFilter,
+  idsFilter,
+  sanitizeUpdatePayload,
+} = require("../utils/childCount");
+const { rejectSamajManagerWrite } = require("../utils/managerScope");
 
 const privateRoutes = ["POST", "DELETE", "PATCH"];
 
@@ -78,9 +89,15 @@ router.get("/list", async (req, res) => {
     ...Name,
   };
   const Regions = await Region.find(filter).skip(offset).limit(limit).exec();
+  const data = await attachChildCounts(
+    Regions,
+    District,
+    "region_id",
+    "districtCount"
+  );
   const totalItems = await Region.countDocuments(filter);
   const totalPages = Math.ceil(totalItems / limit);
-  res.status(200).json({ total: totalItems, page, totalPages, data: Regions });
+  res.status(200).json({ total: totalItems, page, totalPages, data });
 });
 router.get("/get-all-list", async (req, res) => {
   const { data = [] } = req.query;
@@ -106,15 +123,24 @@ router.get("/listByCountry/:id", async (req, res) => {
 // Get all regions by state id
 router.get("/list/:id", async (req, res) => {
   const { id } = req.params;
-  const RegionData = await Region.find({
-    state_id: { $eq: id },
-  });
-  res.status(200).json(RegionData);
+  const RegionData = await findChildrenByParent(
+    State,
+    Region,
+    id,
+    "state_id"
+  );
+  const data = await attachChildCounts(
+    RegionData,
+    District,
+    "region_id",
+    "districtCount"
+  );
+  res.status(200).json(data);
 });
 
 // Add new region
 router.post("/add", async (req, res) => {
-  if (!errorCheck(req, res)) {
+  if (!errorCheck(req, res) && !rejectSamajManagerWrite(req, res)) {
     const data = req.body;
     const dbRegion = await Region.create({
       ...data,
@@ -131,30 +157,27 @@ router.post("/add", async (req, res) => {
 
 // Delete regions by region ids
 router.delete("/delete", async (req, res) => {
-  if (!errorCheck(req, res)) {
+  if (!errorCheck(req, res) && !rejectSamajManagerWrite(req, res)) {
     const data = req.body;
-    await Region.deleteMany({ id: { $in: data.regions } });
+    await Region.deleteMany(idsFilter(data.regions));
     res.status(200).json({ message: "Delete Successfully" });
   }
 });
 
 // Get region info by region id
 router.get("/getInfo/:id", async (req, res) => {
-  const { id } = req.params;
-  const RegionData = await Region.find({
-    id: { $eq: id },
-  });
+  const RegionData = await findByAnyId(Region, req.params.id);
   res.status(200).json(RegionData);
 });
 
 // Update regions by region id
 router.patch("/update/:id", async (req, res) => {
-  if (!errorCheck(req, res)) {
+  if (!errorCheck(req, res) && !rejectSamajManagerWrite(req, res)) {
     const { id } = req.params;
     const payload = { ...req.body };
     await Region.updateOne(
-      { id: id },
-      { ...payload, updatedAt: new Date(), updatedBy: req?.user.id }
+      idOrObjectIdFilter(id),
+      { ...sanitizeUpdatePayload(payload), updatedAt: new Date(), updatedBy: req?.user.id }
     );
     res.status(200).json({ message: "Updated Successfully" });
   }

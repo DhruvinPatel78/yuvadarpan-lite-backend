@@ -1,7 +1,18 @@
 const express = require("express");
 const router = express.Router();
 const District = require("../models/district");
+const Region = require("../models/region");
+const City = require("../models/city");
 const jwt = require("jsonwebtoken");
+const {
+  attachChildCounts,
+  findChildrenByParent,
+  findByAnyId,
+  idOrObjectIdFilter,
+  idsFilter,
+  sanitizeUpdatePayload,
+} = require("../utils/childCount");
+const { rejectSamajManagerWrite } = require("../utils/managerScope");
 
 const privateRoutes = ["POST", "DELETE", "PATCH"];
 
@@ -88,11 +99,15 @@ router.get("/list", async (req, res) => {
     .skip(offset)
     .limit(limit)
     .exec();
+  const data = await attachChildCounts(
+    Districts,
+    City,
+    "district_id",
+    "cityCount"
+  );
   const totalItems = await District.countDocuments(filter);
   const totalPages = Math.ceil(totalItems / limit);
-  res
-    .status(200)
-    .json({ total: totalItems, page, totalPages, data: Districts });
+  res.status(200).json({ total: totalItems, page, totalPages, data });
 });
 router.get("/get-all-list", async (req, res) => {
   const { data = [] } = req.query;
@@ -109,10 +124,19 @@ router.get("/get-all-list", async (req, res) => {
 //  Get districts by region id
 router.get("/list/:id", async (req, res) => {
   const { id } = req.params;
-  const DistrictData = await District.find({
-    region_id: { $eq: id },
-  });
-  res.status(200).json(DistrictData);
+  const DistrictData = await findChildrenByParent(
+    Region,
+    District,
+    id,
+    "region_id"
+  );
+  const data = await attachChildCounts(
+    DistrictData,
+    City,
+    "district_id",
+    "cityCount"
+  );
+  res.status(200).json(data);
 });
 
 //  Get districts by state id
@@ -126,7 +150,7 @@ router.get("/listByState/:id", async (req, res) => {
 
 //  Add new district
 router.post("/add", async (req, res) => {
-  if (!errorCheck(req, res)) {
+  if (!errorCheck(req, res) && !rejectSamajManagerWrite(req, res)) {
     const data = req.body;
     const dbDistrict = await District.create({
       ...data,
@@ -143,30 +167,27 @@ router.post("/add", async (req, res) => {
 
 //  Delete districts by district ids
 router.delete("/delete", async (req, res) => {
-  if (!errorCheck(req, res)) {
+  if (!errorCheck(req, res) && !rejectSamajManagerWrite(req, res)) {
     const data = req.body;
-    await District.deleteMany({ id: { $in: data?.districts } });
+    await District.deleteMany(idsFilter(data?.districts));
     res.status(200).json({ message: "Delete Successfully" });
   }
 });
 
 //  Get district info by district id
 router.get("/getInfo/:id", async (req, res) => {
-  const { id } = req.params;
-  const DistrictData = await District.find({
-    id: { $eq: id },
-  });
+  const DistrictData = await findByAnyId(District, req.params.id);
   res.status(200).json(DistrictData);
 });
 
 // Update district by district id
 router.patch("/update/:id", async (req, res) => {
-  if (!errorCheck(req, res)) {
+  if (!errorCheck(req, res) && !rejectSamajManagerWrite(req, res)) {
     const { id } = req.params;
     const payload = { ...req.body };
     await District.updateOne(
-      { id: id },
-      { ...payload, updatedAt: new Date(), updatedBy: req?.user.id }
+      idOrObjectIdFilter(id),
+      { ...sanitizeUpdatePayload(payload), updatedAt: new Date(), updatedBy: req?.user.id }
     );
     res.status(200).json({ message: "Updated Successfully" });
   }
