@@ -12,7 +12,28 @@ const {
   idsFilter,
   sanitizeUpdatePayload,
 } = require("../utils/childCount");
-const { rejectSamajManagerWrite } = require("../utils/managerScope");
+const {
+  rejectSamajManagerWrite,
+  isCityManager,
+  isDistrictManager,
+  isRegionManager,
+  isStateManager,
+  isCountryManager,
+  getTokenPayload,
+  findAccountByTokenId,
+  getManagerDistrictId,
+  getManagerRegionId,
+  getManagerStateId,
+  getManagerCountryId,
+  districtValueKeys,
+  regionValueKeys,
+  stateValueKeys,
+  countryValueKeys,
+  isOwnDistrictQuery,
+  isOwnRegionQuery,
+  isOwnStateQuery,
+  isOwnCountryQuery,
+} = require("../utils/managerScope");
 
 const privateRoutes = ["POST", "DELETE", "PATCH"];
 
@@ -108,6 +129,31 @@ router.get("/list", async (req, res) => {
     ...Name,
     ...District,
   };
+  const tokenUser = getTokenPayload(req);
+  if (isDistrictManager(tokenUser?.role) && isOwnDistrictQuery(req.query)) {
+    const manager = await findAccountByTokenId(tokenUser?.id);
+    const districtKeys = await districtValueKeys(
+      await getManagerDistrictId(manager),
+    );
+    filter.district_id = { $in: districtKeys.length ? districtKeys : ["__none__"] };
+  }
+  if (isRegionManager(tokenUser?.role) && isOwnRegionQuery(req.query)) {
+    const manager = await findAccountByTokenId(tokenUser?.id);
+    const regionKeys = await regionValueKeys(await getManagerRegionId(manager));
+    filter.region_id = { $in: regionKeys.length ? regionKeys : ["__none__"] };
+  }
+  if (isStateManager(tokenUser?.role) && isOwnStateQuery(req.query)) {
+    const manager = await findAccountByTokenId(tokenUser?.id);
+    const stateKeys = await stateValueKeys(await getManagerStateId(manager));
+    filter.state_id = { $in: stateKeys.length ? stateKeys : ["__none__"] };
+  }
+  if (isCountryManager(tokenUser?.role) && isOwnCountryQuery(req.query)) {
+    const manager = await findAccountByTokenId(tokenUser?.id);
+    const countryKeys = await countryValueKeys(
+      await getManagerCountryId(manager),
+    );
+    filter.country_id = { $in: countryKeys.length ? countryKeys : ["__none__"] };
+  }
   const Cities = await City.find(filter).skip(offset).limit(limit).exec();
   const data = await attachChildCounts(Cities, Samaj, "city_id", "samajCount");
   const totalItems = await City.countDocuments(filter);
@@ -150,28 +196,109 @@ router.get("/listByRegion/:id", async (req, res) => {
 
 // Add new city
 router.post("/add", async (req, res) => {
-  if (!errorCheck(req, res) && !rejectSamajManagerWrite(req, res)) {
-    const data = req.body;
-    const dbCity = await City.create({
-      ...data,
-      id: crypto.randomUUID().replace(/-/g, ""),
-      active: true,
-      createdAt: new Date(),
-      updatedAt: null,
-      createdBy: req.user.id,
-      updatedBy: null,
-    });
-    res.status(200).send(dbCity);
+  if (errorCheck(req, res) || rejectSamajManagerWrite(req, res)) {
+    return;
   }
+  if (isCityManager(req.user?.role)) {
+    return res.status(403).json({ message: "not-allowed" });
+  }
+  const data = req.body;
+  if (isDistrictManager(req.user?.role)) {
+    const manager = await findAccountByTokenId(req.user.id);
+    const districtId = await getManagerDistrictId(manager);
+    const districtKeys = await districtValueKeys(districtId);
+    if (
+      !districtId ||
+      (data.district_id && !districtKeys.includes(String(data.district_id)))
+    ) {
+      return res.status(403).json({ message: "not-allowed" });
+    }
+    data.district_id = districtId;
+  }
+  if (isRegionManager(req.user?.role)) {
+    const manager = await findAccountByTokenId(req.user.id);
+    const regionId = await getManagerRegionId(manager);
+    const regionKeys = await regionValueKeys(regionId);
+    if (
+      !regionId ||
+      (data.region_id && !regionKeys.includes(String(data.region_id)))
+    ) {
+      return res.status(403).json({ message: "not-allowed" });
+    }
+    data.region_id = regionId;
+  }
+  if (isStateManager(req.user?.role)) {
+    const manager = await findAccountByTokenId(req.user.id);
+    const stateId = await getManagerStateId(manager);
+    const stateKeys = await stateValueKeys(stateId);
+    if (
+      !stateId ||
+      (data.state_id && !stateKeys.includes(String(data.state_id)))
+    ) {
+      return res.status(403).json({ message: "not-allowed" });
+    }
+    data.state_id = stateId;
+  }
+  if (isCountryManager(req.user?.role)) {
+    const manager = await findAccountByTokenId(req.user.id);
+    const countryId = await getManagerCountryId(manager);
+    const countryKeys = await countryValueKeys(countryId);
+    if (
+      !countryId ||
+      (data.country_id && !countryKeys.includes(String(data.country_id)))
+    ) {
+      return res.status(403).json({ message: "not-allowed" });
+    }
+    data.country_id = countryId;
+  }
+  const dbCity = await City.create({
+    ...data,
+    id: crypto.randomUUID().replace(/-/g, ""),
+    active: true,
+    createdAt: new Date(),
+    updatedAt: null,
+    createdBy: req.user.id,
+    updatedBy: null,
+  });
+  res.status(200).send(dbCity);
 });
 
 //  Delete cities by city ids
 router.delete("/delete", async (req, res) => {
-  if (!errorCheck(req, res) && !rejectSamajManagerWrite(req, res)) {
-    const data = req.body;
-    await City.deleteMany(idsFilter(data.cities));
-    res.status(200).json({ message: "Delete Successfully" });
+  if (errorCheck(req, res) || rejectSamajManagerWrite(req, res)) {
+    return;
   }
+  if (isCityManager(req.user?.role)) {
+    return res.status(403).json({ message: "not-allowed" });
+  }
+  const data = req.body;
+  const query = idsFilter(data.cities);
+  if (isDistrictManager(req.user?.role)) {
+    const manager = await findAccountByTokenId(req.user.id);
+    const districtKeys = await districtValueKeys(
+      await getManagerDistrictId(manager),
+    );
+    query.district_id = { $in: districtKeys.length ? districtKeys : ["__none__"] };
+  }
+  if (isRegionManager(req.user?.role)) {
+    const manager = await findAccountByTokenId(req.user.id);
+    const regionKeys = await regionValueKeys(await getManagerRegionId(manager));
+    query.region_id = { $in: regionKeys.length ? regionKeys : ["__none__"] };
+  }
+  if (isStateManager(req.user?.role)) {
+    const manager = await findAccountByTokenId(req.user.id);
+    const stateKeys = await stateValueKeys(await getManagerStateId(manager));
+    query.state_id = { $in: stateKeys.length ? stateKeys : ["__none__"] };
+  }
+  if (isCountryManager(req.user?.role)) {
+    const manager = await findAccountByTokenId(req.user.id);
+    const countryKeys = await countryValueKeys(
+      await getManagerCountryId(manager),
+    );
+    query.country_id = { $in: countryKeys.length ? countryKeys : ["__none__"] };
+  }
+  await City.deleteMany(query);
+  res.status(200).json({ message: "Delete Successfully" });
 });
 
 router.get("/getInfo/:id", async (req, res) => {
@@ -181,15 +308,95 @@ router.get("/getInfo/:id", async (req, res) => {
 
 // Update City by city id
 router.patch("/update/:id", async (req, res) => {
-  if (!errorCheck(req, res) && !rejectSamajManagerWrite(req, res)) {
-    const { id } = req.params;
-    const payload = { ...req.body };
-    await City.updateOne(
-      idOrObjectIdFilter(id),
-      { ...sanitizeUpdatePayload(payload), updatedAt: new Date(), updatedBy: req?.user.id }
-    );
-    res.status(200).json({ message: "Updated Successfully" });
+  if (errorCheck(req, res) || rejectSamajManagerWrite(req, res)) {
+    return;
   }
+  if (isCityManager(req.user?.role)) {
+    return res.status(403).json({ message: "not-allowed" });
+  }
+  const { id } = req.params;
+  const payload = { ...req.body };
+  let filter = idOrObjectIdFilter(id);
+  if (isDistrictManager(req.user?.role)) {
+    const manager = await findAccountByTokenId(req.user.id);
+    const districtKeys = await districtValueKeys(
+      await getManagerDistrictId(manager),
+    );
+    filter = {
+      $and: [
+        filter,
+        { district_id: { $in: districtKeys.length ? districtKeys : ["__none__"] } },
+      ],
+    };
+    const allowed = await City.findOne(filter);
+    if (!allowed) {
+      return res.status(403).json({ message: "not-allowed" });
+    }
+    if (
+      payload.district_id &&
+      !districtKeys.includes(String(payload.district_id))
+    ) {
+      return res.status(403).json({ message: "not-allowed" });
+    }
+  }
+  if (isRegionManager(req.user?.role)) {
+    const manager = await findAccountByTokenId(req.user.id);
+    const regionKeys = await regionValueKeys(await getManagerRegionId(manager));
+    filter = {
+      $and: [
+        filter,
+        { region_id: { $in: regionKeys.length ? regionKeys : ["__none__"] } },
+      ],
+    };
+    const allowed = await City.findOne(filter);
+    if (!allowed) {
+      return res.status(403).json({ message: "not-allowed" });
+    }
+    if (payload.region_id && !regionKeys.includes(String(payload.region_id))) {
+      return res.status(403).json({ message: "not-allowed" });
+    }
+  }
+  if (isStateManager(req.user?.role)) {
+    const manager = await findAccountByTokenId(req.user.id);
+    const stateKeys = await stateValueKeys(await getManagerStateId(manager));
+    filter = {
+      $and: [
+        filter,
+        { state_id: { $in: stateKeys.length ? stateKeys : ["__none__"] } },
+      ],
+    };
+    const allowed = await City.findOne(filter);
+    if (!allowed) {
+      return res.status(403).json({ message: "not-allowed" });
+    }
+    if (payload.state_id && !stateKeys.includes(String(payload.state_id))) {
+      return res.status(403).json({ message: "not-allowed" });
+    }
+  }
+  if (isCountryManager(req.user?.role)) {
+    const manager = await findAccountByTokenId(req.user.id);
+    const countryKeys = await countryValueKeys(
+      await getManagerCountryId(manager),
+    );
+    filter = {
+      $and: [
+        filter,
+        { country_id: { $in: countryKeys.length ? countryKeys : ["__none__"] } },
+      ],
+    };
+    const allowed = await City.findOne(filter);
+    if (!allowed) {
+      return res.status(403).json({ message: "not-allowed" });
+    }
+    if (payload.country_id && !countryKeys.includes(String(payload.country_id))) {
+      return res.status(403).json({ message: "not-allowed" });
+    }
+  }
+  await City.updateOne(
+    filter,
+    { ...sanitizeUpdatePayload(payload), updatedAt: new Date(), updatedBy: req?.user.id }
+  );
+  res.status(200).json({ message: "Updated Successfully" });
 });
 
 module.exports = router;

@@ -12,7 +12,19 @@ const {
   idsFilter,
   sanitizeUpdatePayload,
 } = require("../utils/childCount");
-const { rejectSamajManagerWrite } = require("../utils/managerScope");
+const {
+  rejectSamajManagerWrite,
+  isCityManager,
+  isDistrictManager,
+  isRegionManager,
+  isStateManager,
+  isCountryManager,
+  getTokenPayload,
+  findAccountByTokenId,
+  getManagerCountryId,
+  countryValueKeys,
+  isOwnCountryQuery,
+} = require("../utils/managerScope");
 
 const privateRoutes = ["POST", "DELETE", "PATCH"];
 
@@ -81,6 +93,14 @@ router.get("/list", async (req, res) => {
     ...Country,
     ...Name,
   };
+  const tokenUser = getTokenPayload(req);
+  if (isCountryManager(tokenUser?.role) && isOwnCountryQuery(req.query)) {
+    const manager = await findAccountByTokenId(tokenUser?.id);
+    const countryKeys = await countryValueKeys(
+      await getManagerCountryId(manager),
+    );
+    filter.country_id = { $in: countryKeys.length ? countryKeys : ["__none__"] };
+  }
   const States = await State.find(filter).skip(offset).limit(limit).exec();
   const data = await attachChildCounts(
     States,
@@ -124,28 +144,66 @@ router.get("/list/:id", async (req, res) => {
 
 // Add new state
 router.post("/add", async (req, res) => {
-  if (!errorCheck(req, res) && !rejectSamajManagerWrite(req, res)) {
-    const data = req.body;
-    const dbState = await State.create({
-      ...data,
-      id: crypto.randomUUID().replace(/-/g, ""),
-      active: true,
-      createdAt: new Date(),
-      updatedAt: null,
-      createdBy: req.user.id,
-      updatedBy: null,
-    });
-    res.status(200).send(dbState);
+  if (errorCheck(req, res) || rejectSamajManagerWrite(req, res)) {
+    return;
   }
+  if (
+    isCityManager(req.user?.role) ||
+    isDistrictManager(req.user?.role) ||
+    isRegionManager(req.user?.role) ||
+    isStateManager(req.user?.role)
+  ) {
+    return res.status(403).json({ message: "not-allowed" });
+  }
+  const data = req.body;
+  if (isCountryManager(req.user?.role)) {
+    const manager = await findAccountByTokenId(req.user.id);
+    const countryId = await getManagerCountryId(manager);
+    const countryKeys = await countryValueKeys(countryId);
+    if (
+      !countryId ||
+      (data.country_id && !countryKeys.includes(String(data.country_id)))
+    ) {
+      return res.status(403).json({ message: "not-allowed" });
+    }
+    data.country_id = countryId;
+  }
+  const dbState = await State.create({
+    ...data,
+    id: crypto.randomUUID().replace(/-/g, ""),
+    active: true,
+    createdAt: new Date(),
+    updatedAt: null,
+    createdBy: req.user.id,
+    updatedBy: null,
+  });
+  res.status(200).send(dbState);
 });
 
 // Delete states by state ids
 router.delete("/delete", async (req, res) => {
-  if (!errorCheck(req, res) && !rejectSamajManagerWrite(req, res)) {
-    const data = req.body;
-    await State.deleteMany(idsFilter(data.states));
-    res.status(200).json({ message: "Delete Successfully" });
+  if (errorCheck(req, res) || rejectSamajManagerWrite(req, res)) {
+    return;
   }
+  if (
+    isCityManager(req.user?.role) ||
+    isDistrictManager(req.user?.role) ||
+    isRegionManager(req.user?.role) ||
+    isStateManager(req.user?.role)
+  ) {
+    return res.status(403).json({ message: "not-allowed" });
+  }
+  const data = req.body;
+  const query = idsFilter(data.states);
+  if (isCountryManager(req.user?.role)) {
+    const manager = await findAccountByTokenId(req.user.id);
+    const countryKeys = await countryValueKeys(
+      await getManagerCountryId(manager),
+    );
+    query.country_id = { $in: countryKeys.length ? countryKeys : ["__none__"] };
+  }
+  await State.deleteMany(query);
+  res.status(200).json({ message: "Delete Successfully" });
 });
 
 // Get state info by state id
@@ -156,15 +214,44 @@ router.get("/getInfo/:id", async (req, res) => {
 
 // Update state by state id
 router.patch("/update/:id", async (req, res) => {
-  if (!errorCheck(req, res) && !rejectSamajManagerWrite(req, res)) {
-    const { id } = req.params;
-    const payload = { ...req.body };
-    await State.updateOne(
-      idOrObjectIdFilter(id),
-      { ...sanitizeUpdatePayload(payload), updatedAt: new Date(), updatedBy: req?.user.id }
-    );
-    res.status(200).json({ message: "Updated Successfully" });
+  if (errorCheck(req, res) || rejectSamajManagerWrite(req, res)) {
+    return;
   }
+  if (
+    isCityManager(req.user?.role) ||
+    isDistrictManager(req.user?.role) ||
+    isRegionManager(req.user?.role) ||
+    isStateManager(req.user?.role)
+  ) {
+    return res.status(403).json({ message: "not-allowed" });
+  }
+  const { id } = req.params;
+  const payload = { ...req.body };
+  let filter = idOrObjectIdFilter(id);
+  if (isCountryManager(req.user?.role)) {
+    const manager = await findAccountByTokenId(req.user.id);
+    const countryKeys = await countryValueKeys(
+      await getManagerCountryId(manager),
+    );
+    filter = {
+      $and: [
+        filter,
+        { country_id: { $in: countryKeys.length ? countryKeys : ["__none__"] } },
+      ],
+    };
+    const allowed = await State.findOne(filter);
+    if (!allowed) {
+      return res.status(403).json({ message: "not-allowed" });
+    }
+    if (payload.country_id && !countryKeys.includes(String(payload.country_id))) {
+      return res.status(403).json({ message: "not-allowed" });
+    }
+  }
+  await State.updateOne(
+    filter,
+    { ...sanitizeUpdatePayload(payload), updatedAt: new Date(), updatedBy: req?.user.id }
+  );
+  res.status(200).json({ message: "Updated Successfully" });
 });
 
 module.exports = router;

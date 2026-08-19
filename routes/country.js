@@ -4,7 +4,7 @@ const Country = require("../models/country");
 const State = require("../models/state");
 const jwt = require("jsonwebtoken");
 const { attachChildCounts, findByAnyId, idOrObjectIdFilter, idsFilter, sanitizeUpdatePayload } = require("../utils/childCount");
-const { rejectSamajManagerWrite } = require("../utils/managerScope");
+const { rejectLocationMasterWrite } = require("../utils/managerScope");
 
 const privateRoutes = ["POST", "DELETE", "PATCH"];
 
@@ -84,7 +84,7 @@ router.get("/get-all-list", async (req, res) => {
 
 // Add new country
 router.post("/add", async (req, res) => {
-  if (!errorCheck(req, res) && !rejectSamajManagerWrite(req, res)) {
+  if (!errorCheck(req, res) && !rejectLocationMasterWrite(req, res)) {
     const data = req.body;
     const dbCountry = await Country.create({
       ...data,
@@ -101,7 +101,7 @@ router.post("/add", async (req, res) => {
 
 // Delete countries by country ids
 router.delete("/delete", async (req, res) => {
-  if (!errorCheck(req, res) && !rejectSamajManagerWrite(req, res)) {
+  if (!errorCheck(req, res) && !rejectLocationMasterWrite(req, res)) {
     const data = req.body;
     await Country.deleteMany(idsFilter(data?.countries));
     res.status(200).json({ message: "Delete Successfully" });
@@ -115,7 +115,7 @@ router.get("/getInfo/:id", async (req, res) => {
 });
 
 router.patch("/update/:id", async (req, res) => {
-  if (!errorCheck(req, res) && !rejectSamajManagerWrite(req, res)) {
+  if (!errorCheck(req, res) && !rejectLocationMasterWrite(req, res)) {
     const { id } = req.params;
     const payload = { ...req.body };
     await Country.updateOne(
