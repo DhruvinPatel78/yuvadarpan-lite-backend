@@ -1,9 +1,10 @@
 const express = require("express");
 const router = express.Router();
-const AWS = require("aws-sdk");
 const fs = require("fs");
+const path = require("path");
 const multer = require("multer");
 const jwt = require("jsonwebtoken");
+const { s3, BUCKET } = require("../utils/s3");
 const privateRoutes = ["POST", "DELETE", "PATCH"];
 
 const verifyToken = (req, res, next) => {
@@ -45,22 +46,30 @@ const errorCheck = (req, res) => {
     return false;
   }
 };
-const s3 = new AWS.S3({
-  accessKeyId: process.env.ACCESS_KEY_ID,
-  secretAccessKey: process.env.SECRET_ACCESS_KEY,
-});
-
 const storage = multer.diskStorage({});
 
 const upload = multer({ storage });
 router.use(verifyToken);
 
+const sanitizeFilename = (name, originalname) => {
+  const ext = (path.extname(originalname || "") || ".jpg").toLowerCase();
+  const source = name || path.basename(originalname || "photo", path.extname(originalname || ""));
+  const base = String(source)
+    .replace(path.extname(String(source)), "")
+    .replace(/\s+/g, "_")
+    .replace(/[^a-zA-Z0-9._-]/g, "_")
+    .replace(/_+/g, "_")
+    .replace(/^_|_$/g, "")
+    .slice(0, 180) || "yuva_photo";
+  return `${base}${ext}`;
+};
+
 router.post("/upload", upload.single("image"), async (req, res) => {
   if (!errorCheck(req, res)) {
     const file = req?.file;
-    const filename = file.originalname.replace(/ /g, "_");
+    const filename = sanitizeFilename(req.body?.filename, file.originalname);
     const params = {
-      Bucket: "yuvadarpanbucket",
+      Bucket: BUCKET,
       Key: "yuva_images/" + filename,
       Body: fs.createReadStream(file.path),
       ContentType: file?.mimetype,

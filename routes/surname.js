@@ -2,6 +2,8 @@ const express = require("express");
 const router = express.Router();
 const Surname = require("../models/surname");
 const jwt = require("jsonwebtoken");
+const { idsFilter } = require("../utils/childCount");
+const { rejectLocationMasterWrite } = require("../utils/managerScope");
 
 const privateRoutes = ["POST", "DELETE", "PATCH"];
 
@@ -75,7 +77,7 @@ router.get("/get-all-list", async (req, res) => {
 
 // Add new Surname
 router.post("/add", async (req, res) => {
-  if (!errorCheck(req, res)) {
+  if (!errorCheck(req, res) && !rejectLocationMasterWrite(req, res)) {
     const data = req.body;
     const dbSurname = await Surname.create({
       ...data,
@@ -92,9 +94,9 @@ router.post("/add", async (req, res) => {
 
 // Delete Surname by Surname ids
 router.delete("/delete", async (req, res) => {
-  if (!errorCheck(req, res)) {
+  if (!errorCheck(req, res) && !rejectLocationMasterWrite(req, res)) {
     const data = req.body;
-    await Surname.deleteMany({ id: { $in: data?.surnames } });
+    await Surname.deleteMany(idsFilter(data?.surnames));
     res.status(200).json({ message: "Delete Successfully" });
   }
 });
@@ -110,7 +112,7 @@ router.get("/getInfo/:id", async (req, res) => {
 
 // Update Surname by Surname id
 router.patch("/update/:id", async (req, res) => {
-  if (!errorCheck(req, res)) {
+  if (!errorCheck(req, res) && !rejectLocationMasterWrite(req, res)) {
     const { id } = req.params;
     const payload = { ...req.body };
     await Surname.updateOne(

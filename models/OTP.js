@@ -10,10 +10,14 @@ const OTPSchema = new mongoose.Schema({
     type: String,
     required: true,
   },
+  verified: {
+    type: Boolean,
+    default: false,
+  },
   createdAt: {
     type: Date,
     default: Date.now,
-    expires: 60,
+    expires: 300,
   },
 });
 
@@ -25,7 +29,7 @@ async function sendVerificationEmail(email, otp) {
       email,
       "Verification Email",
       `<h1 style="font-weight: bold">Verification code</h1>
-            <p>Please use the verification code below to forget password</p>
+            <p>Please use the verification code below to change your password</p>
             <p style="font-weight: bold;font-size: 18px;">${otp}</p>
             <p>If you didn't request this, you can ignore this email</p>
             <span>Thanks,</span>

@@ -9,6 +9,29 @@ const Region = require("../models/region");
 const { v4: uuidv4 } = require("uuid");
 const { sendNotification } = require("../utils/fcm");
 const notification = require("../data/locale/notifications.json");
+const { idOrObjectIdFilter } = require("../utils/childCount");
+const {
+  findAccountByTokenId,
+  samajValueKeys,
+  usersInManagerCityQuery,
+  usersInManagerDistrictQuery,
+  usersInManagerRegionQuery,
+  usersInManagerStateQuery,
+  usersInManagerCountryQuery,
+  samajIdsForCity,
+  samajIdsForDistrict,
+  samajIdsForRegion,
+  samajIdsForState,
+  samajIdsForCountry,
+  getManagerCityId,
+  getManagerDistrictId,
+  getManagerRegionId,
+  getManagerStateId,
+  getManagerCountryId,
+  regionValueKeys,
+  regionIdsForState,
+  regionIdsForCountry,
+} = require("../utils/managerScope");
 
 const verifyToken = (req, res, next) => {
   const authHeader = req.headers.authorization;
@@ -51,6 +74,20 @@ const errorCheck = (req, res) => {
 };
 
 router.use(verifyToken);
+
+router.get("/me", async (req, res) => {
+  if (!errorCheck(req, res)) {
+    const user = await findAccountByTokenId(req.user.id);
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+    const safeUser = user.toObject ? user.toObject() : { ...user };
+    delete safeUser.password;
+    safeUser.id = user._id || user.id;
+    delete safeUser._id;
+    res.status(200).json(safeUser);
+  }
+});
 
 router.get("/list", async (req, res) => {
   if (!errorCheck(req, res)) {
@@ -152,20 +189,102 @@ router.get("/list", async (req, res) => {
         .status(200)
         .json({ total: totalItems, page, totalPages, data: users });
     } else if (role === "REGION_MANAGER") {
-      const mangerRegion = await User.findById(id);
-      if (mangerRegion?.region) {
-        const MangerUsers = await User.find({
-          region: { $eq: mangerRegion?.region },
-          ...filterSearch,
-        })
+      const ownRegion =
+        req.query.ownRegion === true ||
+        String(req.query.ownRegion).toLowerCase() === "true";
+      if (!ownRegion) {
+        const users = await User.find({ ...filterSearch })
           .sort({ id: -1 })
           .skip(offset)
           .limit(limit)
           .exec();
-        const managerTotalItem = await User.find({
-          region: { $eq: mangerRegion?.region },
+        const totalItems = await User.countDocuments({ ...filterSearch });
+        const totalPages = Math.ceil(totalItems / limit);
+        res
+          .status(200)
+          .json({ total: totalItems, page, totalPages, data: users });
+      } else {
+        const manager = await findAccountByTokenId(id);
+        const managerQuery = {
           ...filterSearch,
-        }).countDocuments({});
+          ...(await usersInManagerRegionQuery(manager)),
+        };
+        const MangerUsers = await User.find(managerQuery)
+          .sort({ id: -1 })
+          .skip(offset)
+          .limit(limit)
+          .exec();
+        const managerTotalItem = await User.countDocuments(managerQuery);
+        const totalPages = Math.ceil(managerTotalItem / limit);
+        res.status(200).json({
+          total: managerTotalItem,
+          page,
+          totalPages,
+          data: MangerUsers,
+        });
+      }
+    } else if (role === "STATE_MANAGER") {
+      const ownState =
+        req.query.ownState === true ||
+        String(req.query.ownState).toLowerCase() === "true";
+      if (!ownState) {
+        const users = await User.find({ ...filterSearch })
+          .sort({ id: -1 })
+          .skip(offset)
+          .limit(limit)
+          .exec();
+        const totalItems = await User.countDocuments({ ...filterSearch });
+        const totalPages = Math.ceil(totalItems / limit);
+        res
+          .status(200)
+          .json({ total: totalItems, page, totalPages, data: users });
+      } else {
+        const manager = await findAccountByTokenId(id);
+        const managerQuery = {
+          ...filterSearch,
+          ...(await usersInManagerStateQuery(manager)),
+        };
+        const MangerUsers = await User.find(managerQuery)
+          .sort({ id: -1 })
+          .skip(offset)
+          .limit(limit)
+          .exec();
+        const managerTotalItem = await User.countDocuments(managerQuery);
+        const totalPages = Math.ceil(managerTotalItem / limit);
+        res.status(200).json({
+          total: managerTotalItem,
+          page,
+          totalPages,
+          data: MangerUsers,
+        });
+      }
+    } else if (role === "COUNTRY_MANAGER") {
+      const ownCountry =
+        req.query.ownCountry === true ||
+        String(req.query.ownCountry).toLowerCase() === "true";
+      if (!ownCountry) {
+        const users = await User.find({ ...filterSearch })
+          .sort({ id: -1 })
+          .skip(offset)
+          .limit(limit)
+          .exec();
+        const totalItems = await User.countDocuments({ ...filterSearch });
+        const totalPages = Math.ceil(totalItems / limit);
+        res
+          .status(200)
+          .json({ total: totalItems, page, totalPages, data: users });
+      } else {
+        const manager = await findAccountByTokenId(id);
+        const managerQuery = {
+          ...filterSearch,
+          ...(await usersInManagerCountryQuery(manager)),
+        };
+        const MangerUsers = await User.find(managerQuery)
+          .sort({ id: -1 })
+          .skip(offset)
+          .limit(limit)
+          .exec();
+        const managerTotalItem = await User.countDocuments(managerQuery);
         const totalPages = Math.ceil(managerTotalItem / limit);
         res.status(200).json({
           total: managerTotalItem,
@@ -175,20 +294,103 @@ router.get("/list", async (req, res) => {
         });
       }
     } else if (role === "SAMAJ_MANAGER") {
-      const mangerSamaj = await User.findById(id);
-      if (mangerSamaj?.localSamaj) {
-        const MangerUsers = await User.find({
-          localSamaj: { $eq: mangerSamaj?.localSamaj },
-          ...filterSearch,
-        })
+      const ownSamaj =
+        req.query.ownSamaj === true ||
+        String(req.query.ownSamaj).toLowerCase() === "true";
+      if (!ownSamaj) {
+        const users = await User.find({ ...filterSearch })
           .sort({ id: -1 })
           .skip(offset)
           .limit(limit)
           .exec();
-        const managerTotalItem = await User.find({
-          localSamaj: { $eq: mangerSamaj?.localSamaj },
+        const totalItems = await User.countDocuments({ ...filterSearch });
+        const totalPages = Math.ceil(totalItems / limit);
+        res
+          .status(200)
+          .json({ total: totalItems, page, totalPages, data: users });
+      } else {
+        const mangerSamaj = await findAccountByTokenId(id);
+        const samajKeys = await samajValueKeys(mangerSamaj?.localSamaj);
+        const managerQuery = {
           ...filterSearch,
-        }).countDocuments({});
+          localSamaj: { $in: samajKeys },
+        };
+        const MangerUsers = await User.find(managerQuery)
+          .sort({ id: -1 })
+          .skip(offset)
+          .limit(limit)
+          .exec();
+        const managerTotalItem = await User.countDocuments(managerQuery);
+        const totalPages = Math.ceil(managerTotalItem / limit);
+        res.status(200).json({
+          total: managerTotalItem,
+          page,
+          totalPages,
+          data: MangerUsers,
+        });
+      }
+    } else if (role === "CITY_MANAGER") {
+      const ownCity =
+        req.query.ownCity === true ||
+        String(req.query.ownCity).toLowerCase() === "true";
+      if (!ownCity) {
+        const users = await User.find({ ...filterSearch })
+          .sort({ id: -1 })
+          .skip(offset)
+          .limit(limit)
+          .exec();
+        const totalItems = await User.countDocuments({ ...filterSearch });
+        const totalPages = Math.ceil(totalItems / limit);
+        res
+          .status(200)
+          .json({ total: totalItems, page, totalPages, data: users });
+      } else {
+        const manager = await findAccountByTokenId(id);
+        const managerQuery = {
+          ...filterSearch,
+          ...(await usersInManagerCityQuery(manager)),
+        };
+        const MangerUsers = await User.find(managerQuery)
+          .sort({ id: -1 })
+          .skip(offset)
+          .limit(limit)
+          .exec();
+        const managerTotalItem = await User.countDocuments(managerQuery);
+        const totalPages = Math.ceil(managerTotalItem / limit);
+        res.status(200).json({
+          total: managerTotalItem,
+          page,
+          totalPages,
+          data: MangerUsers,
+        });
+      }
+    } else if (role === "DISTRICT_MANAGER") {
+      const ownDistrict =
+        req.query.ownDistrict === true ||
+        String(req.query.ownDistrict).toLowerCase() === "true";
+      if (!ownDistrict) {
+        const users = await User.find({ ...filterSearch })
+          .sort({ id: -1 })
+          .skip(offset)
+          .limit(limit)
+          .exec();
+        const totalItems = await User.countDocuments({ ...filterSearch });
+        const totalPages = Math.ceil(totalItems / limit);
+        res
+          .status(200)
+          .json({ total: totalItems, page, totalPages, data: users });
+      } else {
+        const manager = await findAccountByTokenId(id);
+        const managerQuery = {
+          ...filterSearch,
+          ...(await usersInManagerDistrictQuery(manager)),
+        };
+        const MangerUsers = await User.find(managerQuery)
+          .sort({ id: -1 })
+          .skip(offset)
+          .limit(limit)
+          .exec();
+        const managerTotalItem = await User.countDocuments(managerQuery);
         const totalPages = Math.ceil(managerTotalItem / limit);
         res.status(200).json({
           total: managerTotalItem,
@@ -289,86 +491,154 @@ router.get("/requests", async (req, res) => {
       ...Email,
       ...Roles,
     };
+    const pendingQuery = {
+      allowed: { $eq: false },
+      $or: [{ active: true }, { updatedAt: null }],
+      ...filterSearch,
+    };
     if (role === "ADMIN") {
-      const users = await User.find({
-        allowed: { $eq: false },
-        active: true,
-        ...filterSearch,
-      })
+      const users = await User.find(pendingQuery)
         .sort({ id: -1 })
         .skip(offset)
         .limit(limit)
         .exec();
-      const totalItems = await User.find({
-        allowed: { $eq: false },
-        active: true,
-        ...filterSearch,
-      }).countDocuments({});
+      const totalItems = await User.countDocuments(pendingQuery);
       const totalPages = Math.ceil(totalItems / limit);
       res
         .status(200)
         .json({ total: totalItems, page, totalPages, data: users });
     } else if (role === "REGION_MANAGER") {
-      const mangerRegion = await User.findById(id);
-      if (mangerRegion?.region) {
-        const MangerUsers = await User.find({
-          allowed: { $eq: false },
-          active: true,
-          region: { $eq: mangerRegion?.region },
-          ...filterSearch,
-        })
-          .sort({ id: -1 })
-          .skip(offset)
-          .limit(limit)
-          .exec();
-        const managerTotalItem = await User.find({
-          allowed: { $eq: false },
-          active: true,
-          region: { $eq: mangerRegion?.region },
-          ...filterSearch,
-        }).countDocuments({});
-        const totalPages = Math.ceil(managerTotalItem / limit);
-        res.status(200).json({
-          total: managerTotalItem,
-          page,
-          totalPages,
-          data: MangerUsers,
-        });
-      }
+      const manager = await findAccountByTokenId(id);
+      const managerPendingQuery = {
+        ...pendingQuery,
+        ...(await usersInManagerRegionQuery(manager)),
+      };
+      const MangerUsers = await User.find(managerPendingQuery)
+        .sort({ id: -1 })
+        .skip(offset)
+        .limit(limit)
+        .exec();
+      const managerTotalItem = await User.countDocuments(managerPendingQuery);
+      const totalPages = Math.ceil(managerTotalItem / limit);
+      res.status(200).json({
+        total: managerTotalItem,
+        page,
+        totalPages,
+        data: MangerUsers,
+      });
+    } else if (role === "STATE_MANAGER") {
+      const manager = await findAccountByTokenId(id);
+      const managerPendingQuery = {
+        ...pendingQuery,
+        ...(await usersInManagerStateQuery(manager)),
+      };
+      const MangerUsers = await User.find(managerPendingQuery)
+        .sort({ id: -1 })
+        .skip(offset)
+        .limit(limit)
+        .exec();
+      const managerTotalItem = await User.countDocuments(managerPendingQuery);
+      const totalPages = Math.ceil(managerTotalItem / limit);
+      res.status(200).json({
+        total: managerTotalItem,
+        page,
+        totalPages,
+        data: MangerUsers,
+      });
+    } else if (role === "COUNTRY_MANAGER") {
+      const manager = await findAccountByTokenId(id);
+      const managerPendingQuery = {
+        ...pendingQuery,
+        ...(await usersInManagerCountryQuery(manager)),
+      };
+      const MangerUsers = await User.find(managerPendingQuery)
+        .sort({ id: -1 })
+        .skip(offset)
+        .limit(limit)
+        .exec();
+      const managerTotalItem = await User.countDocuments(managerPendingQuery);
+      const totalPages = Math.ceil(managerTotalItem / limit);
+      res.status(200).json({
+        total: managerTotalItem,
+        page,
+        totalPages,
+        data: MangerUsers,
+      });
     } else if (role === "SAMAJ_MANAGER") {
-      const mangerSamaj = await User.findById(id);
-      if (mangerSamaj?.localSamaj) {
-        const MangerUsers = await User.find({
-          allowed: { $eq: false },
-          active: true,
-          localSamaj: { $eq: mangerSamaj?.localSamaj },
-          ...filterSearch,
-        })
-          .sort({ id: -1 })
-          .skip(offset)
-          .limit(limit)
-          .exec();
-        const managerTotalItem = await User.find({
-          allowed: { $eq: false },
-          active: true,
-          localSamaj: { $eq: mangerSamaj?.localSamaj },
-          ...filterSearch,
-        }).countDocuments({});
-        const totalPages = Math.ceil(managerTotalItem / limit);
-        res.status(200).json({
-          total: managerTotalItem,
-          page,
-          totalPages,
-          data: MangerUsers,
-        });
-      }
+      const mangerSamaj = await findAccountByTokenId(id);
+      const samajKeys = await samajValueKeys(mangerSamaj?.localSamaj);
+      const managerPendingQuery = {
+        ...pendingQuery,
+        localSamaj: { $in: samajKeys },
+      };
+      const MangerUsers = await User.find(managerPendingQuery)
+        .sort({ id: -1 })
+        .skip(offset)
+        .limit(limit)
+        .exec();
+      const managerTotalItem = await User.countDocuments(managerPendingQuery);
+      const totalPages = Math.ceil(managerTotalItem / limit);
+      res.status(200).json({
+        total: managerTotalItem,
+        page,
+        totalPages,
+        data: MangerUsers,
+      });
+    } else if (role === "CITY_MANAGER") {
+      const manager = await findAccountByTokenId(id);
+      const managerPendingQuery = {
+        ...pendingQuery,
+        ...(await usersInManagerCityQuery(manager)),
+      };
+      const MangerUsers = await User.find(managerPendingQuery)
+        .sort({ id: -1 })
+        .skip(offset)
+        .limit(limit)
+        .exec();
+      const managerTotalItem = await User.countDocuments(managerPendingQuery);
+      const totalPages = Math.ceil(managerTotalItem / limit);
+      res.status(200).json({
+        total: managerTotalItem,
+        page,
+        totalPages,
+        data: MangerUsers,
+      });
+    } else if (role === "DISTRICT_MANAGER") {
+      const manager = await findAccountByTokenId(id);
+      const managerPendingQuery = {
+        ...pendingQuery,
+        ...(await usersInManagerDistrictQuery(manager)),
+      };
+      const MangerUsers = await User.find(managerPendingQuery)
+        .sort({ id: -1 })
+        .skip(offset)
+        .limit(limit)
+        .exec();
+      const managerTotalItem = await User.countDocuments(managerPendingQuery);
+      const totalPages = Math.ceil(managerTotalItem / limit);
+      res.status(200).json({
+        total: managerTotalItem,
+        page,
+        totalPages,
+        data: MangerUsers,
+      });
     }
   }
 });
 
 router.post("/add", async (req, res) => {
-  if (!errorCheck(req, res)) {
-    const user = req.body;
+  try {
+    if (errorCheck(req, res)) {
+      return;
+    }
+    const user = { ...req.body };
+    delete user.confirmPassword;
+    if (user.role && typeof user.role === "object") {
+      user.role = user.role.value || user.role.id || "USER";
+    }
+    if (!user.password) {
+      return res.status(400).json({ message: "password-required" });
+    }
     user.password = await bcrypt.hash(user.password, 10);
     const Email = user.email
       ? {
@@ -390,32 +660,86 @@ router.post("/add", async (req, res) => {
           : emailExist
             ? "Email-is-already-exist"
             : "Mobile-is-already-exist";
-      res.status(401).json({ message: errorMessage });
-    } else {
-      const dbUser = await User.create({
-        ...user,
-        id: uuidv4().replace(/-/g, ""),
-        createdAt: new Date(),
-        updatedAt: null,
-        createdBy: null,
-        updatedBy: null,
-        active: true,
-        allowed: false,
-        fcmToken: user.fcmToken || null,
-      });
-      // if (dbUser.fcmToken) {
-      //   try {
-      //     await sendNotification(
-      //       dbUser.fcmToken,
-      //       "Registration Successful",
-      //       "Welcome to Yuvadarpan! Your registration was successful.",
-      //     );
-      //   } catch (err) {
-      //     console.error("FCM notification error:", err);
-      //   }
-      // }
-      res.send(dbUser);
+      return res.status(409).json({ message: errorMessage });
     }
+    const actorRole = req.user?.role;
+    const isAdmin = String(actorRole || "").toUpperCase() === "ADMIN";
+    if (
+      actorRole === "SAMAJ_MANAGER" ||
+      actorRole === "CITY_MANAGER" ||
+      actorRole === "DISTRICT_MANAGER" ||
+      actorRole === "REGION_MANAGER" ||
+      actorRole === "STATE_MANAGER" ||
+      actorRole === "COUNTRY_MANAGER"
+    ) {
+      user.role = "USER";
+    }
+    if (actorRole === "CITY_MANAGER") {
+      const manager = await findAccountByTokenId(req.user.id);
+      const samajIds = await samajIdsForCity(await getManagerCityId(manager));
+      if (!user.localSamaj || !samajIds.includes(String(user.localSamaj))) {
+        return res.status(403).json({ message: "not-allowed" });
+      }
+    }
+    if (actorRole === "DISTRICT_MANAGER") {
+      const manager = await findAccountByTokenId(req.user.id);
+      const samajIds = await samajIdsForDistrict(
+        await getManagerDistrictId(manager),
+      );
+      if (!user.localSamaj || !samajIds.includes(String(user.localSamaj))) {
+        return res.status(403).json({ message: "not-allowed" });
+      }
+    }
+    if (actorRole === "REGION_MANAGER") {
+      const manager = await findAccountByTokenId(req.user.id);
+      const regionId = await getManagerRegionId(manager);
+      const regionKeys = await regionValueKeys(regionId);
+      const samajIds = await samajIdsForRegion(regionId);
+      if (!user.localSamaj || !samajIds.includes(String(user.localSamaj))) {
+        return res.status(403).json({ message: "not-allowed" });
+      }
+      if (regionId) {
+        user.region = regionKeys[0] || regionId;
+      }
+    }
+    if (actorRole === "STATE_MANAGER") {
+      const manager = await findAccountByTokenId(req.user.id);
+      const stateId = await getManagerStateId(manager);
+      const samajIds = await samajIdsForState(stateId);
+      const regionIds = await regionIdsForState(stateId);
+      if (!user.localSamaj || !samajIds.includes(String(user.localSamaj))) {
+        return res.status(403).json({ message: "not-allowed" });
+      }
+      if (user.region && regionIds.length && !regionIds.includes(String(user.region))) {
+        return res.status(403).json({ message: "not-allowed" });
+      }
+    }
+    if (actorRole === "COUNTRY_MANAGER") {
+      const manager = await findAccountByTokenId(req.user.id);
+      const countryId = await getManagerCountryId(manager);
+      const samajIds = await samajIdsForCountry(countryId);
+      const regionIds = await regionIdsForCountry(countryId);
+      if (!user.localSamaj || !samajIds.includes(String(user.localSamaj))) {
+        return res.status(403).json({ message: "not-allowed" });
+      }
+      if (user.region && regionIds.length && !regionIds.includes(String(user.region))) {
+        return res.status(403).json({ message: "not-allowed" });
+      }
+    }
+    const dbUser = await User.create({
+      ...user,
+      id: uuidv4().replace(/-/g, ""),
+      createdAt: new Date(),
+      updatedAt: null,
+      createdBy: req.user?.id || null,
+      updatedBy: null,
+      active: true,
+      allowed: isAdmin,
+      fcmToken: user.fcmToken || null,
+    });
+    res.send(dbUser);
+  } catch (e) {
+    res.status(400).json({ message: e.message || "failed-to-create-user" });
   }
 });
 
@@ -458,7 +782,7 @@ router.post("/signup", async (req, res) => {
       updatedAt: null,
       createdBy: null,
       updatedBy: null,
-      active: false,
+      active: true,
       allowed: false,
       fcmToken: user.fcmToken || null,
       language: user.language || "en",
@@ -505,6 +829,7 @@ router.post("/sendOtp", async (req, res) => {
       });
     }
     const otpPayload = { email, otp };
+    await OTP.deleteMany({ email });
     await OTP.create(otpPayload);
     res.status(200).json({
       message: `otp-sent-successfully`,
@@ -535,11 +860,14 @@ router.post("/verifyOtp", async (req, res) => {
       const now = new Date();
       const createdAt = new Date(isOtpExist.createdAt);
       const diffSeconds = (now - createdAt) / 1000;
-      if (diffSeconds > 60) {
+      if (diffSeconds > 300) {
         await OTP.findByIdAndDelete(isOtpExist?.id);
         return res.status(410).send({ message: "otp-expired" });
       }
-      await OTP.findByIdAndDelete(isOtpExist?.id);
+      await OTP.updateOne(
+        { _id: isOtpExist._id },
+        { $set: { verified: true } },
+      );
       res.status(200).send({ message: "otp-verify-successfully" });
     } else {
       return res.status(404).send({ message: "invalid-otp" });
@@ -601,6 +929,120 @@ router.patch("/update/:id", async (req, res) => {
       return res.status(404).json({ message: "User not found" });
     }
 
+    const isSelf =
+      String(req.user.id) === String(id) ||
+      String(req.user.id) === String(currentUser._id) ||
+      String(req.user.id) === String(currentUser.id);
+
+    if (isSelf) {
+      delete payload.role;
+      delete payload.allowed;
+      delete payload.active;
+      delete payload.password;
+    }
+
+    if (!isSelf && req.user.role === "SAMAJ_MANAGER") {
+      const manager = await findAccountByTokenId(req.user.id);
+      const samajKeys = await samajValueKeys(manager?.localSamaj);
+      if (!samajKeys.includes(String(currentUser.localSamaj))) {
+        return res.status(403).json({ message: "not-allowed" });
+      }
+      delete payload.role;
+    }
+    if (!isSelf && req.user.role === "CITY_MANAGER") {
+      const manager = await findAccountByTokenId(req.user.id);
+      const inCity = await User.findOne({
+        _id: currentUser._id,
+        ...(await usersInManagerCityQuery(manager)),
+      });
+      if (!inCity) {
+        return res.status(403).json({ message: "not-allowed" });
+      }
+      delete payload.role;
+      if (payload.localSamaj) {
+        const samajIds = await samajIdsForCity(await getManagerCityId(manager));
+        if (!samajIds.includes(String(payload.localSamaj))) {
+          return res.status(403).json({ message: "not-allowed" });
+        }
+      }
+    }
+    if (!isSelf && req.user.role === "DISTRICT_MANAGER") {
+      const manager = await findAccountByTokenId(req.user.id);
+      const inDistrict = await User.findOne({
+        _id: currentUser._id,
+        ...(await usersInManagerDistrictQuery(manager)),
+      });
+      if (!inDistrict) {
+        return res.status(403).json({ message: "not-allowed" });
+      }
+      delete payload.role;
+      if (payload.localSamaj) {
+        const samajIds = await samajIdsForDistrict(
+          await getManagerDistrictId(manager),
+        );
+        if (!samajIds.includes(String(payload.localSamaj))) {
+          return res.status(403).json({ message: "not-allowed" });
+        }
+      }
+    }
+    if (!isSelf && req.user.role === "REGION_MANAGER") {
+      const manager = await findAccountByTokenId(req.user.id);
+      const inRegion = await User.findOne({
+        _id: currentUser._id,
+        ...(await usersInManagerRegionQuery(manager)),
+      });
+      if (!inRegion) {
+        return res.status(403).json({ message: "not-allowed" });
+      }
+      delete payload.role;
+      if (payload.localSamaj) {
+        const samajIds = await samajIdsForRegion(
+          await getManagerRegionId(manager),
+        );
+        if (!samajIds.includes(String(payload.localSamaj))) {
+          return res.status(403).json({ message: "not-allowed" });
+        }
+      }
+    }
+    if (!isSelf && req.user.role === "STATE_MANAGER") {
+      const manager = await findAccountByTokenId(req.user.id);
+      const inState = await User.findOne({
+        _id: currentUser._id,
+        ...(await usersInManagerStateQuery(manager)),
+      });
+      if (!inState) {
+        return res.status(403).json({ message: "not-allowed" });
+      }
+      delete payload.role;
+      if (payload.localSamaj) {
+        const samajIds = await samajIdsForState(
+          await getManagerStateId(manager),
+        );
+        if (!samajIds.includes(String(payload.localSamaj))) {
+          return res.status(403).json({ message: "not-allowed" });
+        }
+      }
+    }
+    if (!isSelf && req.user.role === "COUNTRY_MANAGER") {
+      const manager = await findAccountByTokenId(req.user.id);
+      const inCountry = await User.findOne({
+        _id: currentUser._id,
+        ...(await usersInManagerCountryQuery(manager)),
+      });
+      if (!inCountry) {
+        return res.status(403).json({ message: "not-allowed" });
+      }
+      delete payload.role;
+      if (payload.localSamaj) {
+        const samajIds = await samajIdsForCountry(
+          await getManagerCountryId(manager),
+        );
+        if (!samajIds.includes(String(payload.localSamaj))) {
+          return res.status(403).json({ message: "not-allowed" });
+        }
+      }
+    }
+
     if (payload?.password) {
       payload.password = await bcrypt.hash(payload.password, 10);
     }
@@ -630,8 +1072,99 @@ router.patch("/update/:id", async (req, res) => {
 router.delete("/delete", async (req, res) => {
   if (!errorCheck(req, res)) {
     const data = req.body;
-    await User.deleteMany({ _id: { $in: data.users } });
+    const query = { _id: { $in: data.users } };
+    if (req.user.role === "SAMAJ_MANAGER") {
+      const manager = await findAccountByTokenId(req.user.id);
+      query.localSamaj = { $in: await samajValueKeys(manager?.localSamaj) };
+    }
+    if (req.user.role === "CITY_MANAGER") {
+      const manager = await findAccountByTokenId(req.user.id);
+      Object.assign(query, await usersInManagerCityQuery(manager));
+    }
+    if (req.user.role === "DISTRICT_MANAGER") {
+      const manager = await findAccountByTokenId(req.user.id);
+      Object.assign(query, await usersInManagerDistrictQuery(manager));
+    }
+    if (req.user.role === "REGION_MANAGER") {
+      const manager = await findAccountByTokenId(req.user.id);
+      Object.assign(query, await usersInManagerRegionQuery(manager));
+    }
+    if (req.user.role === "STATE_MANAGER") {
+      const manager = await findAccountByTokenId(req.user.id);
+      Object.assign(query, await usersInManagerStateQuery(manager));
+    }
+    if (req.user.role === "COUNTRY_MANAGER") {
+      const manager = await findAccountByTokenId(req.user.id);
+      Object.assign(query, await usersInManagerCountryQuery(manager));
+    }
+    await User.deleteMany(query);
     res.status(200).json({ message: "Delete Successfully" });
+  }
+});
+
+router.post("/sendChangePasswordOtp", async (req, res) => {
+  if (!errorCheck(req, res)) {
+    const manager = await findAccountByTokenId(req.user.id);
+    if (!manager?.email) {
+      return res.status(404).send({ message: "email-invalid" });
+    }
+    const email = manager.email;
+    let otp = OtpGenerator.generate(6, {
+      upperCaseAlphabets: false,
+      lowerCaseAlphabets: false,
+      specialChars: false,
+    });
+    let result = await OTP.findOne({ otp });
+    while (result) {
+      otp = OtpGenerator.generate(6, {
+        upperCaseAlphabets: false,
+        lowerCaseAlphabets: false,
+        specialChars: false,
+      });
+      result = await OTP.findOne({ otp });
+    }
+    await OTP.deleteMany({ email });
+    await OTP.create({ email, otp });
+    res.status(200).json({ message: "otp-sent-successfully" });
+  }
+});
+
+router.patch("/changePassword", async (req, res) => {
+  if (!errorCheck(req, res)) {
+    const { password } = req.body;
+    if (!password) {
+      return res.status(400).json({ message: "password-required" });
+    }
+    const manager = await findAccountByTokenId(req.user.id);
+    if (!manager?.email) {
+      return res.status(404).send({ message: "email-invalid" });
+    }
+    const verifiedOtp = await OTP.findOne({
+      email: manager.email,
+      verified: true,
+    });
+    if (!verifiedOtp) {
+      return res.status(403).json({ message: "otp-not-verified" });
+    }
+    const now = new Date();
+    const createdAt = new Date(verifiedOtp.createdAt);
+    if ((now - createdAt) / 1000 > 300) {
+      await OTP.findByIdAndDelete(verifiedOtp._id);
+      return res.status(410).send({ message: "otp-expired" });
+    }
+    const newPassword = await bcrypt.hash(password, 10);
+    await User.updateOne(
+      { _id: manager._id },
+      {
+        $set: {
+          password: newPassword,
+          updatedAt: new Date(),
+          updatedBy: req.user.id,
+        },
+      },
+    );
+    await OTP.deleteMany({ email: manager.email });
+    res.status(200).send({ message: "password-update-successfully" });
   }
 });
 
@@ -673,11 +1206,35 @@ router.patch("/approveRejectMany", async (req, res) => {
     const { ids, action } = req.body;
     const isAccepting = action === "accept";
 
-    const usersToUpdate = await User.find({ _id: { $in: ids } }).lean();
+    const query = { _id: { $in: ids } };
+    if (req.user.role === "SAMAJ_MANAGER") {
+      const manager = await findAccountByTokenId(req.user.id);
+      query.localSamaj = { $in: await samajValueKeys(manager?.localSamaj) };
+    }
+    if (req.user.role === "CITY_MANAGER") {
+      const manager = await findAccountByTokenId(req.user.id);
+      Object.assign(query, await usersInManagerCityQuery(manager));
+    }
+    if (req.user.role === "DISTRICT_MANAGER") {
+      const manager = await findAccountByTokenId(req.user.id);
+      Object.assign(query, await usersInManagerDistrictQuery(manager));
+    }
+    if (req.user.role === "REGION_MANAGER") {
+      const manager = await findAccountByTokenId(req.user.id);
+      Object.assign(query, await usersInManagerRegionQuery(manager));
+    }
+    if (req.user.role === "STATE_MANAGER") {
+      const manager = await findAccountByTokenId(req.user.id);
+      Object.assign(query, await usersInManagerStateQuery(manager));
+    }
+    if (req.user.role === "COUNTRY_MANAGER") {
+      const manager = await findAccountByTokenId(req.user.id);
+      Object.assign(query, await usersInManagerCountryQuery(manager));
+    }
 
-    await User.updateMany(
-      { _id: { $in: ids } },
-      {
+    const usersToUpdate = await User.find(query).lean();
+
+    await User.updateMany(query, {
         $set: {
           allowed: isAccepting,
           active: isAccepting,
