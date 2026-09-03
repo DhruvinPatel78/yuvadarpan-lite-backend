@@ -106,6 +106,40 @@ const toQueryArray = (value) => {
   return list.filter((item) => item !== undefined && item !== null && item !== "");
 };
 
+const parseAgeBound = (value) => {
+  if (value == null || value === "") {
+    return null;
+  }
+  const age = Number(value);
+  if (!Number.isFinite(age) || age < 0 || age > 120) {
+    return null;
+  }
+  return Math.floor(age);
+};
+
+const dobRangeForAge = (minAge, maxAge) => {
+  let fromAge = minAge;
+  let toAge = maxAge;
+  if (fromAge != null && toAge != null && fromAge > toAge) {
+    const swapped = fromAge;
+    fromAge = toAge;
+    toAge = swapped;
+  }
+  const now = new Date();
+  const dob = {};
+  if (fromAge != null) {
+    const latestDob = new Date(now);
+    latestDob.setFullYear(latestDob.getFullYear() - fromAge);
+    dob.$lte = latestDob;
+  }
+  if (toAge != null) {
+    const earliestDob = new Date(now);
+    earliestDob.setFullYear(earliestDob.getFullYear() - (toAge + 1));
+    dob.$gt = earliestDob;
+  }
+  return Object.keys(dob).length ? { dob } : null;
+};
+
 const escapeRegex = (value) =>
   String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
@@ -148,12 +182,29 @@ const buildYuvaListFilter = (query = {}) => {
   if (samaj.length) {
     clauses.push({ localSamaj: { $in: samaj } });
   }
+  const gender = toQueryArray(query.gender);
+  if (gender.length) {
+    clauses.push({
+      $or: gender.map((item) => ({
+        gender: {
+          $regex: `^${escapeRegex(String(item).trim())}$`,
+          $options: "i",
+        },
+      })),
+    });
+  }
+  const ageClause = dobRangeForAge(
+    parseAgeBound(query.minAge),
+    parseAgeBound(query.maxAge)
+  );
+  if (ageClause) {
+    clauses.push(ageClause);
+  }
   [
     containsClause("familyId", query.familyId),
     containsClause("firstName", query.firstName),
     containsClause("fatherName", query.fatherName),
     containsClause("grandFatherName", query.grandFatherName),
-    containsClause("gender", query.gender),
     containsClause("firm", query.firmName || query.firm),
     containsClause("email", query.email),
   ]
