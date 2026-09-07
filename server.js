@@ -56,6 +56,7 @@ app.use("/swagger", swaggerUi.serve, swaggerUi.setup(specs));
 app.use("/yuva", yuvaRouter);
 app.use("/user", userRouter);
 app.use("/yuvalist", yuvaListRoutes);
+app.use("/yuvaList", yuvaListRoutes);
 app.use("/image", imageRouter);
 app.use("/country", countryRouter);
 app.use("/native", nativeRouter);

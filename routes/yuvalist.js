@@ -27,6 +27,7 @@ const {
   mergeYuvaWriteFilter,
   constrainYuvaLocationForManager,
 } = require("../utils/managerScope");
+const { attachLinkedRoute } = require("../utils/linkedRecords");
 
 const verifyToken = (req, res, next) => {
   const authHeader = req.headers.authorization;
@@ -81,6 +82,8 @@ const errorCheck = (req, res) => {
     return false;
   }
 };
+
+attachLinkedRoute(router, "yuva", errorCheck);
 
 const toQueryArray = (value) => {
   if (value == null || value === "") {

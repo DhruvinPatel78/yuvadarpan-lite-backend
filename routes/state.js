@@ -25,6 +25,7 @@ const {
   countryValueKeys,
   isOwnCountryQuery,
 } = require("../utils/managerScope");
+const { attachLinkedRoute } = require("../utils/linkedRecords");
 
 const privateRoutes = ["POST", "DELETE", "PATCH"];
 
@@ -71,6 +72,7 @@ const errorCheck = (req, res) => {
 };
 
 router.use(verifyToken);
+attachLinkedRoute(router, "state", errorCheck);
 
 // Get all states
 router.get("/list", async (req, res) => {
