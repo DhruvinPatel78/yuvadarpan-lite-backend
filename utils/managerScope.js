@@ -8,6 +8,8 @@ const State = require("../models/state");
 const Country = require("../models/country");
 const { idOrObjectIdFilter } = require("./childCount");
 
+const isAdmin = (role) => String(role || "").toUpperCase() === "ADMIN";
+
 const isSamajManager = (role) =>
   String(role || "").toUpperCase() === "SAMAJ_MANAGER";
 
@@ -625,6 +627,175 @@ const recordsInManagerCountryQuery = async (manager) => {
   return { $or: clauses };
 };
 
+const denyAllFilter = { _id: { $in: [] } };
+
+const containsId = (ids, value) =>
+  Boolean(value) && (ids || []).map(String).includes(String(value));
+
+const getYuvaWriteScopeFilter = async (role, userId) => {
+  const normalized = String(role || "").toUpperCase();
+  if (normalized === "ADMIN") {
+    return {};
+  }
+  if (!isLocationMasterReadOnly(normalized)) {
+    return denyAllFilter;
+  }
+  const manager = await findAccountByTokenId(userId);
+  if (!manager) {
+    return denyAllFilter;
+  }
+  if (normalized === "SAMAJ_MANAGER") {
+    const samajKeys = await samajValueKeys(manager.localSamaj);
+    if (!samajKeys.length) {
+      return denyAllFilter;
+    }
+    return { localSamaj: { $in: samajKeys } };
+  }
+  if (normalized === "CITY_MANAGER") {
+    return recordsInManagerCityQuery(manager);
+  }
+  if (normalized === "DISTRICT_MANAGER") {
+    return recordsInManagerDistrictQuery(manager);
+  }
+  if (normalized === "REGION_MANAGER") {
+    return recordsInManagerRegionQuery(manager);
+  }
+  if (normalized === "STATE_MANAGER") {
+    return recordsInManagerStateQuery(manager);
+  }
+  if (normalized === "COUNTRY_MANAGER") {
+    return recordsInManagerCountryQuery(manager);
+  }
+  return denyAllFilter;
+};
+
+const mergeYuvaWriteFilter = (baseFilter, scopeFilter) => {
+  if (!scopeFilter || !Object.keys(scopeFilter).length) {
+    return baseFilter;
+  }
+  return { $and: [baseFilter, scopeFilter] };
+};
+
+const constrainYuvaLocationForManager = async (user, payload = {}) => {
+  const data = { ...(payload || {}) };
+  const role = String(user?.role || "").toUpperCase();
+  if (role === "ADMIN") {
+    return { ok: true, data };
+  }
+  if (!isLocationMasterReadOnly(role)) {
+    return { ok: false, status: 403, message: "not-allowed" };
+  }
+  const manager = await findAccountByTokenId(user.id);
+  if (role === "SAMAJ_MANAGER") {
+    if (!manager?.localSamaj) {
+      return { ok: false, status: 403, message: "samaj-not-assigned" };
+    }
+    data.localSamaj = manager.localSamaj;
+    return { ok: true, data };
+  }
+  if (role === "CITY_MANAGER") {
+    const cityId = await getManagerCityId(manager);
+    if (!cityId) {
+      return { ok: false, status: 403, message: "city-not-assigned" };
+    }
+    data.city = cityId;
+    const samajIds = await samajIdsForCity(cityId);
+    if (data.localSamaj && !containsId(samajIds, data.localSamaj)) {
+      return { ok: false, status: 403, message: "not-allowed" };
+    }
+    return { ok: true, data };
+  }
+  if (role === "DISTRICT_MANAGER") {
+    const districtId = await getManagerDistrictId(manager);
+    if (!districtId) {
+      return { ok: false, status: 403, message: "district-not-assigned" };
+    }
+    data.district = districtId;
+    const cityIds = await cityIdsForDistrict(districtId);
+    if (data.city && !containsId(cityIds, data.city)) {
+      return { ok: false, status: 403, message: "not-allowed" };
+    }
+    const samajIds = await samajIdsForDistrict(districtId);
+    if (data.localSamaj && !containsId(samajIds, data.localSamaj)) {
+      return { ok: false, status: 403, message: "not-allowed" };
+    }
+    return { ok: true, data };
+  }
+  if (role === "REGION_MANAGER") {
+    const regionId = await getManagerRegionId(manager);
+    if (!regionId) {
+      return { ok: false, status: 403, message: "region-not-assigned" };
+    }
+    data.region = regionId;
+    const districtIds = await districtIdsForRegion(regionId);
+    if (data.district && !containsId(districtIds, data.district)) {
+      return { ok: false, status: 403, message: "not-allowed" };
+    }
+    const cityIds = await cityIdsForRegion(regionId);
+    if (data.city && !containsId(cityIds, data.city)) {
+      return { ok: false, status: 403, message: "not-allowed" };
+    }
+    const samajIds = await samajIdsForRegion(regionId);
+    if (data.localSamaj && !containsId(samajIds, data.localSamaj)) {
+      return { ok: false, status: 403, message: "not-allowed" };
+    }
+    return { ok: true, data };
+  }
+  if (role === "STATE_MANAGER") {
+    const stateId = await getManagerStateId(manager);
+    if (!stateId) {
+      return { ok: false, status: 403, message: "state-not-assigned" };
+    }
+    data.state = stateId;
+    const regionIds = await regionIdsForState(stateId);
+    if (data.region && !containsId(regionIds, data.region)) {
+      return { ok: false, status: 403, message: "not-allowed" };
+    }
+    const districtIds = await districtIdsForState(stateId);
+    if (data.district && !containsId(districtIds, data.district)) {
+      return { ok: false, status: 403, message: "not-allowed" };
+    }
+    const cityIds = await cityIdsForState(stateId);
+    if (data.city && !containsId(cityIds, data.city)) {
+      return { ok: false, status: 403, message: "not-allowed" };
+    }
+    const samajIds = await samajIdsForState(stateId);
+    if (data.localSamaj && !containsId(samajIds, data.localSamaj)) {
+      return { ok: false, status: 403, message: "not-allowed" };
+    }
+    return { ok: true, data };
+  }
+  if (role === "COUNTRY_MANAGER") {
+    const countryId = await getManagerCountryId(manager);
+    if (!countryId) {
+      return { ok: false, status: 403, message: "country-not-assigned" };
+    }
+    data.country = countryId;
+    const stateIds = await stateIdsForCountry(countryId);
+    if (data.state && !containsId(stateIds, data.state)) {
+      return { ok: false, status: 403, message: "not-allowed" };
+    }
+    const regionIds = await regionIdsForCountry(countryId);
+    if (data.region && !containsId(regionIds, data.region)) {
+      return { ok: false, status: 403, message: "not-allowed" };
+    }
+    const districtIds = await districtIdsForCountry(countryId);
+    if (data.district && !containsId(districtIds, data.district)) {
+      return { ok: false, status: 403, message: "not-allowed" };
+    }
+    const cityIds = await cityIdsForCountry(countryId);
+    if (data.city && !containsId(cityIds, data.city)) {
+      return { ok: false, status: 403, message: "not-allowed" };
+    }
+    const samajIds = await samajIdsForCountry(countryId);
+    if (data.localSamaj && !containsId(samajIds, data.localSamaj)) {
+      return { ok: false, status: 403, message: "not-allowed" };
+    }
+    return { ok: true, data };
+  }
+  return { ok: false, status: 403, message: "not-allowed" };
+};
+
 module.exports = {
   findAccountByTokenId,
   samajValueKeys,
@@ -675,7 +846,11 @@ module.exports = {
   isRegionManager,
   isStateManager,
   isCountryManager,
+  isAdmin,
   isLocationMasterReadOnly,
+  getYuvaWriteScopeFilter,
+  mergeYuvaWriteFilter,
+  constrainYuvaLocationForManager,
   getTokenPayload,
   getRoleFromRequest,
   rejectSamajManagerWrite,

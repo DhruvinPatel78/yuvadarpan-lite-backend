@@ -102,6 +102,10 @@ const yuvaListSchema = new mongoose.Schema({
   district: String,
   localSamaj: String,
   handicapDetails: String,
+  other: {
+    type: mongoose.Schema.Types.Mixed,
+    default: {},
+  },
   active: Boolean,
   createdAt: Date,
   updatedAt: Date,

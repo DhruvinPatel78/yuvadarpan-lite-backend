@@ -16,32 +16,16 @@ const {
   isOwnRegionQuery,
   isOwnStateQuery,
   isOwnCountryQuery,
-  usersInManagerCityQuery,
   recordsInManagerCityQuery,
   recordsInManagerDistrictQuery,
   recordsInManagerRegionQuery,
   recordsInManagerStateQuery,
   recordsInManagerCountryQuery,
-  getManagerCityId,
-  getManagerDistrictId,
-  getManagerRegionId,
-  getManagerStateId,
-  getManagerCountryId,
-  samajIdsForCity,
-  samajIdsForDistrict,
-  samajIdsForRegion,
-  samajIdsForState,
-  samajIdsForCountry,
-  cityIdsForDistrict,
-  cityIdsForRegion,
-  cityIdsForState,
-  cityIdsForCountry,
-  districtIdsForRegion,
-  districtIdsForState,
-  districtIdsForCountry,
-  regionIdsForState,
-  regionIdsForCountry,
-  stateIdsForCountry,
+  isAdmin,
+  isLocationMasterReadOnly,
+  getYuvaWriteScopeFilter,
+  mergeYuvaWriteFilter,
+  constrainYuvaLocationForManager,
 } = require("../utils/managerScope");
 
 const verifyToken = (req, res, next) => {
@@ -416,116 +400,13 @@ router.get("/citylist", async (req, res) => {
 router.post("/addYuvaList", async (req, res) => {
   const data = req.body;
   const user = req.user;
-  if (user.role === "ADMIN" || user.role === "SAMAJ_MANAGER" || user.role === "CITY_MANAGER" || user.role === "DISTRICT_MANAGER" || user.role === "REGION_MANAGER" || user.role === "STATE_MANAGER" || user.role === "COUNTRY_MANAGER") {
-    if (user.role === "SAMAJ_MANAGER") {
-      const manager = await findAccountByTokenId(user.id);
-      if (!manager?.localSamaj) {
-        return res.status(403).send({ message: "samaj-not-assigned" });
-      }
-      data.localSamaj = manager.localSamaj;
-    }
-    if (user.role === "CITY_MANAGER") {
-      const manager = await findAccountByTokenId(user.id);
-      const cityId = await getManagerCityId(manager);
-      if (!cityId) {
-        return res.status(403).send({ message: "city-not-assigned" });
-      }
-      data.city = cityId;
-      const samajIds = await samajIdsForCity(cityId);
-      if (data.localSamaj && !samajIds.includes(String(data.localSamaj))) {
-        return res.status(403).json({ message: "not-allowed" });
-      }
-    }
-    if (user.role === "DISTRICT_MANAGER") {
-      const manager = await findAccountByTokenId(user.id);
-      const districtId = await getManagerDistrictId(manager);
-      if (!districtId) {
-        return res.status(403).send({ message: "district-not-assigned" });
-      }
-      data.district = districtId;
-      const cityIds = await cityIdsForDistrict(districtId);
-      if (data.city && !cityIds.includes(String(data.city))) {
-        return res.status(403).json({ message: "not-allowed" });
-      }
-      const samajIds = await samajIdsForDistrict(districtId);
-      if (data.localSamaj && !samajIds.includes(String(data.localSamaj))) {
-        return res.status(403).json({ message: "not-allowed" });
-      }
-    }
-    if (user.role === "REGION_MANAGER") {
-      const manager = await findAccountByTokenId(user.id);
-      const regionId = await getManagerRegionId(manager);
-      if (!regionId) {
-        return res.status(403).send({ message: "region-not-assigned" });
-      }
-      data.region = regionId;
-      const districtIds = await districtIdsForRegion(regionId);
-      if (data.district && !districtIds.includes(String(data.district))) {
-        return res.status(403).json({ message: "not-allowed" });
-      }
-      const cityIds = await cityIdsForRegion(regionId);
-      if (data.city && !cityIds.includes(String(data.city))) {
-        return res.status(403).json({ message: "not-allowed" });
-      }
-      const samajIds = await samajIdsForRegion(regionId);
-      if (data.localSamaj && !samajIds.includes(String(data.localSamaj))) {
-        return res.status(403).json({ message: "not-allowed" });
-      }
-    }
-    if (user.role === "STATE_MANAGER") {
-      const manager = await findAccountByTokenId(user.id);
-      const stateId = await getManagerStateId(manager);
-      if (!stateId) {
-        return res.status(403).send({ message: "state-not-assigned" });
-      }
-      data.state = stateId;
-      const regionIds = await regionIdsForState(stateId);
-      if (data.region && !regionIds.includes(String(data.region))) {
-        return res.status(403).json({ message: "not-allowed" });
-      }
-      const districtIds = await districtIdsForState(stateId);
-      if (data.district && !districtIds.includes(String(data.district))) {
-        return res.status(403).json({ message: "not-allowed" });
-      }
-      const cityIds = await cityIdsForState(stateId);
-      if (data.city && !cityIds.includes(String(data.city))) {
-        return res.status(403).json({ message: "not-allowed" });
-      }
-      const samajIds = await samajIdsForState(stateId);
-      if (data.localSamaj && !samajIds.includes(String(data.localSamaj))) {
-        return res.status(403).json({ message: "not-allowed" });
-      }
-    }
-    if (user.role === "COUNTRY_MANAGER") {
-      const manager = await findAccountByTokenId(user.id);
-      const countryId = await getManagerCountryId(manager);
-      if (!countryId) {
-        return res.status(403).send({ message: "country-not-assigned" });
-      }
-      data.country = countryId;
-      const stateIds = await stateIdsForCountry(countryId);
-      if (data.state && !stateIds.includes(String(data.state))) {
-        return res.status(403).json({ message: "not-allowed" });
-      }
-      const regionIds = await regionIdsForCountry(countryId);
-      if (data.region && !regionIds.includes(String(data.region))) {
-        return res.status(403).json({ message: "not-allowed" });
-      }
-      const districtIds = await districtIdsForCountry(countryId);
-      if (data.district && !districtIds.includes(String(data.district))) {
-        return res.status(403).json({ message: "not-allowed" });
-      }
-      const cityIds = await cityIdsForCountry(countryId);
-      if (data.city && !cityIds.includes(String(data.city))) {
-        return res.status(403).json({ message: "not-allowed" });
-      }
-      const samajIds = await samajIdsForCountry(countryId);
-      if (data.localSamaj && !samajIds.includes(String(data.localSamaj))) {
-        return res.status(403).json({ message: "not-allowed" });
-      }
+  if (isAdmin(user.role) || isLocationMasterReadOnly(user.role)) {
+    const constrained = await constrainYuvaLocationForManager(user, data);
+    if (!constrained.ok) {
+      return res.status(constrained.status).json({ message: constrained.message });
     }
     const dbYuvaList = await Yuvalist.create({
-      ...data,
+      ...constrained.data,
       // id: crypto.randomUUID().replace(/-/g, ""),
       id: uuidv4().replace(/-/g, ""),
       active: true,
@@ -553,32 +434,8 @@ const deleteYuvaRecords = async (filter) => {
 router.delete("/delete", async (req, res) => {
   if (!errorCheck(req, res)) {
     const ids = req.body?.ids || [];
-    let filter = idsFilter(ids);
-    if (req.user.role === "SAMAJ_MANAGER") {
-      const manager = await findAccountByTokenId(req.user.id);
-      const samajKeys = await samajValueKeys(manager?.localSamaj);
-      filter = { $and: [filter, { localSamaj: { $in: samajKeys } }] };
-    }
-    if (req.user.role === "CITY_MANAGER") {
-      const manager = await findAccountByTokenId(req.user.id);
-      filter = { $and: [filter, await recordsInManagerCityQuery(manager)] };
-    }
-    if (req.user.role === "DISTRICT_MANAGER") {
-      const manager = await findAccountByTokenId(req.user.id);
-      filter = { $and: [filter, await recordsInManagerDistrictQuery(manager)] };
-    }
-    if (req.user.role === "REGION_MANAGER") {
-      const manager = await findAccountByTokenId(req.user.id);
-      filter = { $and: [filter, await recordsInManagerRegionQuery(manager)] };
-    }
-    if (req.user.role === "STATE_MANAGER") {
-      const manager = await findAccountByTokenId(req.user.id);
-      filter = { $and: [filter, await recordsInManagerStateQuery(manager)] };
-    }
-    if (req.user.role === "COUNTRY_MANAGER") {
-      const manager = await findAccountByTokenId(req.user.id);
-      filter = { $and: [filter, await recordsInManagerCountryQuery(manager)] };
-    }
+    const scope = await getYuvaWriteScopeFilter(req.user.role, req.user.id);
+    const filter = mergeYuvaWriteFilter(idsFilter(ids), scope);
     await deleteYuvaRecords(filter);
     res.status(200).json({ message: "Delete Successfully" });
   }
@@ -586,31 +443,11 @@ router.delete("/delete", async (req, res) => {
 
 router.delete("/:id", async (req, res) => {
   if (!errorCheck(req, res)) {
-    let filter = idOrObjectIdFilter(req.params.id);
-    if (req.user.role === "SAMAJ_MANAGER") {
-      const manager = await findAccountByTokenId(req.user.id);
-      const samajKeys = await samajValueKeys(manager?.localSamaj);
-      filter = { $and: [filter, { localSamaj: { $in: samajKeys } }] };
-    }
-    if (req.user.role === "CITY_MANAGER") {
-      const manager = await findAccountByTokenId(req.user.id);
-      filter = { $and: [filter, await recordsInManagerCityQuery(manager)] };
-    }
-    if (req.user.role === "DISTRICT_MANAGER") {
-      const manager = await findAccountByTokenId(req.user.id);
-      filter = { $and: [filter, await recordsInManagerDistrictQuery(manager)] };
-    }
-    if (req.user.role === "REGION_MANAGER") {
-      const manager = await findAccountByTokenId(req.user.id);
-      filter = { $and: [filter, await recordsInManagerRegionQuery(manager)] };
-    }
-    if (req.user.role === "STATE_MANAGER") {
-      const manager = await findAccountByTokenId(req.user.id);
-      filter = { $and: [filter, await recordsInManagerStateQuery(manager)] };
-    }
-    if (req.user.role === "COUNTRY_MANAGER") {
-      const manager = await findAccountByTokenId(req.user.id);
-      filter = { $and: [filter, await recordsInManagerCountryQuery(manager)] };
+    const scope = await getYuvaWriteScopeFilter(req.user.role, req.user.id);
+    const filter = mergeYuvaWriteFilter(idOrObjectIdFilter(req.params.id), scope);
+    const allowed = await Yuvalist.findOne(filter);
+    if (!allowed) {
+      return res.status(403).json({ message: "not-allowed" });
     }
     await deleteYuvaRecords(filter);
     res.status(200).json({ message: "Delete Successfully" });
@@ -620,64 +457,25 @@ router.delete("/:id", async (req, res) => {
 router.patch("/update/:id", async (req, res) => {
   if (!errorCheck(req, res)) {
     const { id } = req.params;
-    let filter = idOrObjectIdFilter(id);
-    if (req.user.role === "SAMAJ_MANAGER") {
-      const manager = await findAccountByTokenId(req.user.id);
-      const samajKeys = await samajValueKeys(manager?.localSamaj);
-      filter = { $and: [filter, { localSamaj: { $in: samajKeys } }] };
-      const allowed = await Yuvalist.findOne(filter);
-      if (!allowed) {
-        return res.status(403).json({ message: "not-allowed" });
-      }
+    const scope = await getYuvaWriteScopeFilter(req.user.role, req.user.id);
+    const filter = mergeYuvaWriteFilter(idOrObjectIdFilter(id), scope);
+    const allowed = await Yuvalist.findOne(filter);
+    if (!allowed) {
+      return res.status(isAdmin(req.user.role) ? 404 : 403).json({
+        message: isAdmin(req.user.role) ? "yuva-not-found" : "not-allowed",
+      });
     }
-    if (req.user.role === "CITY_MANAGER") {
-      const manager = await findAccountByTokenId(req.user.id);
-      filter = { $and: [filter, await recordsInManagerCityQuery(manager)] };
-      const allowed = await Yuvalist.findOne(filter);
-      if (!allowed) {
-        return res.status(403).json({ message: "not-allowed" });
-      }
+    const constrained = await constrainYuvaLocationForManager(req.user, req.body);
+    if (!constrained.ok) {
+      return res.status(constrained.status).json({ message: constrained.message });
     }
-    if (req.user.role === "DISTRICT_MANAGER") {
-      const manager = await findAccountByTokenId(req.user.id);
-      filter = { $and: [filter, await recordsInManagerDistrictQuery(manager)] };
-      const allowed = await Yuvalist.findOne(filter);
-      if (!allowed) {
-        return res.status(403).json({ message: "not-allowed" });
-      }
-    }
-    if (req.user.role === "REGION_MANAGER") {
-      const manager = await findAccountByTokenId(req.user.id);
-      filter = { $and: [filter, await recordsInManagerRegionQuery(manager)] };
-      const allowed = await Yuvalist.findOne(filter);
-      if (!allowed) {
-        return res.status(403).json({ message: "not-allowed" });
-      }
-    }
-    if (req.user.role === "STATE_MANAGER") {
-      const manager = await findAccountByTokenId(req.user.id);
-      filter = { $and: [filter, await recordsInManagerStateQuery(manager)] };
-      const allowed = await Yuvalist.findOne(filter);
-      if (!allowed) {
-        return res.status(403).json({ message: "not-allowed" });
-      }
-    }
-    if (req.user.role === "COUNTRY_MANAGER") {
-      const manager = await findAccountByTokenId(req.user.id);
-      filter = { $and: [filter, await recordsInManagerCountryQuery(manager)] };
-      const allowed = await Yuvalist.findOne(filter);
-      if (!allowed) {
-        return res.status(403).json({ message: "not-allowed" });
-      }
-    }
-    await Yuvalist.updateOne(
-      filter,
-      {
-        ...sanitizeUpdatePayload(req.body),
+    await Yuvalist.updateOne(filter, {
+      $set: {
+        ...sanitizeUpdatePayload(constrained.data),
         updatedAt: new Date(),
         updatedBy: req?.user?.id,
       },
-    );
+    });
     res.status(200).json({ message: "Updated Successfully" });
   }
 });
