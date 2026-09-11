@@ -70,6 +70,11 @@ const getPublicYuvaById = async (id) => {
     return null;
   }
   const json = typeof yuva.toJSON === "function" ? yuva.toJSON() : { ...yuva };
+  const rawOther = typeof yuva.get === "function" ? yuva.get("other") : yuva.other;
+  json.other =
+    rawOther && typeof rawOther.toObject === "function"
+      ? rawOther.toObject()
+      : rawOther || json.other || {};
   json.labels = await resolveYuvaLabels(yuva);
   return json;
 };

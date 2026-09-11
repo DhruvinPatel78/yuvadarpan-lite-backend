@@ -32,6 +32,7 @@ const {
   regionIdsForState,
   regionIdsForCountry,
 } = require("../utils/managerScope");
+const { attachLinkedRoute } = require("../utils/linkedRecords");
 
 const verifyToken = (req, res, next) => {
   const authHeader = req.headers.authorization;
@@ -74,6 +75,7 @@ const errorCheck = (req, res) => {
 };
 
 router.use(verifyToken);
+attachLinkedRoute(router, "user", errorCheck);
 
 router.get("/me", async (req, res) => {
   if (!errorCheck(req, res)) {

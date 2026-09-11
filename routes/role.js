@@ -3,6 +3,7 @@ const router = express.Router();
 const Role = require("../models/role");
 const jwt = require("jsonwebtoken");
 const { rejectLocationMasterWrite } = require("../utils/managerScope");
+const { attachLinkedRoute } = require("../utils/linkedRecords");
 
 const privateRoutes = ["POST", "DELETE", "PATCH"];
 
@@ -49,6 +50,7 @@ const errorCheck = (req, res) => {
 };
 
 router.use(verifyToken);
+attachLinkedRoute(router, "role", errorCheck);
 
 // Get all countries
 router.get("/list", async (req, res) => {

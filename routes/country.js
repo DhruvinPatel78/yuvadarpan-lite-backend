@@ -5,6 +5,7 @@ const State = require("../models/state");
 const jwt = require("jsonwebtoken");
 const { attachChildCounts, findByAnyId, idOrObjectIdFilter, idsFilter, sanitizeUpdatePayload } = require("../utils/childCount");
 const { rejectLocationMasterWrite } = require("../utils/managerScope");
+const { attachLinkedRoute } = require("../utils/linkedRecords");
 
 const privateRoutes = ["POST", "DELETE", "PATCH"];
 
@@ -51,6 +52,7 @@ const errorCheck = (req, res) => {
 };
 
 router.use(verifyToken);
+attachLinkedRoute(router, "country", errorCheck);
 
 // Get all countries
 router.get("/list", async (req, res) => {

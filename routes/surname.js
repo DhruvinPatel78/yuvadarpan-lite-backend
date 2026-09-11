@@ -4,6 +4,7 @@ const Surname = require("../models/surname");
 const jwt = require("jsonwebtoken");
 const { idsFilter } = require("../utils/childCount");
 const { rejectLocationMasterWrite } = require("../utils/managerScope");
+const { attachLinkedRoute } = require("../utils/linkedRecords");
 
 const privateRoutes = ["POST", "DELETE", "PATCH"];
 
@@ -50,6 +51,7 @@ const errorCheck = (req, res) => {
 };
 
 router.use(verifyToken);
+attachLinkedRoute(router, "surname", errorCheck);
 
 // Get all Surname
 router.get("/list", async (req, res) => {
