@@ -1,7 +1,7 @@
 const path = require("path");
 const fs = require("fs");
 
-const appEnv = String(process.env.APP_ENV || "").toLowerCase();
+const appEnv = String(process.env.APP_ENV || process.argv[2] || "").toLowerCase();
 const envFile =
   appEnv === "staging"
     ? ".env.staging"
@@ -40,6 +40,8 @@ console.log("port =>", PORT);
 
 mongoose.connect(process.env.MONGO_URL).then(() => {
   console.log("Connected to MongoDB");
+}).catch((err) => {
+  console.error("MongoDB connection failed:", err.message);
 });
 
 const logger = (req, res, next) => {

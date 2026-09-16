@@ -5,11 +5,11 @@
   "main": "server.js",
   "scripts": {
     "dev": "nodemon server.js",
-    "dev:staging": "APP_ENV=staging nodemon server.js",
-    "dev:production": "APP_ENV=production nodemon server.js",
+    "dev:staging": "nodemon server.js staging",
+    "dev:production": "nodemon server.js production",
     "start": "node server.js",
-    "start:staging": "APP_ENV=staging node server.js",
-    "start:production": "APP_ENV=production node server.js"
+    "start:staging": "node server.js staging",
+    "start:production": "node server.js production"
   },
   "author": "",
   "license": "ISC",
