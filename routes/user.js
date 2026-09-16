@@ -36,30 +36,39 @@ const { attachLinkedRoute } = require("../utils/linkedRecords");
 
 const verifyToken = (req, res, next) => {
   const authHeader = req.headers.authorization;
-  if (authHeader) {
-    jwt.verify(
-      authHeader.replace("Bearer", ""),
+  if (!authHeader) {
+    req.error = { message: "no-token" };
+    return next();
+  }
+  try {
+    const decoded = jwt.verify(
+      String(authHeader).replace(/^Bearer\s+/i, "").trim(),
       process.env.JWT_SECRET,
-      (error, res) => {
-        if (res) {
-          req.user = {
-            email: res.email,
-            role: res.role,
-            id: res.id,
-          };
-        } else {
-          req.error = {
-            message: error.name,
-          };
-        }
-      },
     );
-  } else {
-    req.error = {
-      message: "no-token",
+    req.user = {
+      email: decoded.email,
+      role: decoded.role,
+      id: decoded.id,
     };
+  } catch (error) {
+    req.error = { message: error.name };
   }
   next();
+};
+
+const createUniqueOtp = async () => {
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    const otp = OtpGenerator.generate(6, {
+      upperCaseAlphabets: false,
+      lowerCaseAlphabets: false,
+      specialChars: false,
+    });
+    const exists = await OTP.findOne({ otp }).lean();
+    if (!exists) {
+      return otp;
+    }
+  }
+  throw new Error("otp-generate-failed");
 };
 
 const errorCheck = (req, res) => {
@@ -818,27 +827,21 @@ router.post("/sendOtp", async (req, res) => {
     : {};
   const dbUser = await User.findOne(Email).lean();
 
-  if (dbUser) {
-    let otp = OtpGenerator.generate(6, {
-      upperCaseAlphabets: false,
-      lowerCaseAlphabets: false,
-      specialChars: false,
+  if (!dbUser?.email) {
+    return res.status(404).send({ message: "email-invalid" });
+  }
+  try {
+    const otp = await createUniqueOtp();
+    await OTP.deleteMany({ email: dbUser.email });
+    await OTP.create({ email: dbUser.email, otp });
+    await OTP.sendVerificationEmail(dbUser.email, otp);
+    return res.status(200).json({
+      message: "otp-sent-successfully",
     });
-    const result = await OTP.findOne({ otp: otp });
-    while (result) {
-      otp = OtpGenerator.generate(6, {
-        upperCaseAlphabets: false,
-      });
-    }
-    const otpPayload = { email, otp };
-    await OTP.deleteMany({ email });
-    await OTP.create(otpPayload);
-    res.status(200).json({
-      message: `otp-sent-successfully`,
-      otp,
-    });
-  } else {
-    res.status(404).send({ message: "email-invalid" });
+  } catch (error) {
+    console.error("sendOtp", error.message);
+    await OTP.deleteMany({ email: dbUser.email });
+    return res.status(502).json({ message: "otp-email-failed" });
   }
 });
 
@@ -1105,29 +1108,29 @@ router.delete("/delete", async (req, res) => {
 });
 
 router.post("/sendChangePasswordOtp", async (req, res) => {
-  if (!errorCheck(req, res)) {
+  if (errorCheck(req, res)) {
+    return;
+  }
+  try {
     const manager = await findAccountByTokenId(req.user.id);
     if (!manager?.email) {
       return res.status(404).send({ message: "email-invalid" });
     }
     const email = manager.email;
-    let otp = OtpGenerator.generate(6, {
-      upperCaseAlphabets: false,
-      lowerCaseAlphabets: false,
-      specialChars: false,
-    });
-    let result = await OTP.findOne({ otp });
-    while (result) {
-      otp = OtpGenerator.generate(6, {
-        upperCaseAlphabets: false,
-        lowerCaseAlphabets: false,
-        specialChars: false,
-      });
-      result = await OTP.findOne({ otp });
-    }
+    const otp = await createUniqueOtp();
     await OTP.deleteMany({ email });
     await OTP.create({ email, otp });
-    res.status(200).json({ message: "otp-sent-successfully" });
+    await OTP.sendVerificationEmail(email, otp);
+    return res.status(200).json({ message: "otp-sent-successfully" });
+  } catch (error) {
+    console.error("sendChangePasswordOtp", error.message);
+    if (req.user?.id) {
+      const manager = await findAccountByTokenId(req.user.id);
+      if (manager?.email) {
+        await OTP.deleteMany({ email: manager.email });
+      }
+    }
+    return res.status(502).json({ message: "otp-email-failed" });
   }
 });
 
