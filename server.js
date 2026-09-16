@@ -1,4 +1,17 @@
-require("dotenv").config();
+const path = require("path");
+const fs = require("fs");
+
+const appEnv = String(process.env.APP_ENV || "").toLowerCase();
+const envFile =
+  appEnv === "staging"
+    ? ".env.staging"
+    : appEnv === "production"
+      ? ".env.production"
+      : ".env";
+const envPath = path.join(__dirname, envFile);
+const loadedEnv = fs.existsSync(envPath) ? envPath : path.join(__dirname, ".env");
+require("dotenv").config({ path: loadedEnv });
+console.log("APP_ENV =>", appEnv || "local", "| env file =>", path.basename(loadedEnv));
 
 const express = require("express");
 const mongoose = require("mongoose");
@@ -16,6 +29,7 @@ const cityRouter = require("./routes/city");
 const samajRouter = require("./routes/samaj");
 const surnameRouter = require("./routes/surname");
 const roleRouter = require("./routes/role");
+const shortlistRouter = require("./routes/shortlist");
 const { specs, swaggerUi } = require("./swagger");
 
 const app = express();
@@ -67,6 +81,7 @@ app.use("/city", cityRouter);
 app.use("/samaj", samajRouter);
 app.use("/surname", surnameRouter);
 app.use("/role", roleRouter);
+app.use("/shortlist", shortlistRouter);
 
 app.listen(PORT, () => {
   console.log(`Server is up and running on ${PORT}`);
