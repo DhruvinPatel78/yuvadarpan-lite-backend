@@ -1,5 +1,7 @@
 /node_modules
 .env
+.env.staging
+.env.production
 yarn.lock
 .idea
 .netlify
