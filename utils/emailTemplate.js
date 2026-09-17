@@ -17,7 +17,7 @@ const escapeHtml = (value) =>
     .replace(/"/g, "&quot;");
 
 const paragraph = (text) =>
-  `<p style="margin:0 0 14px;font-size:15px;line-height:1.65;color:${COLORS.text};">${escapeHtml(text)}</p>`;
+  `<p style="margin:0 0 10px;font-size:15px;line-height:1.55;color:${COLORS.text};">${escapeHtml(text)}</p>`;
 
 const renderEmail = ({
   heading,
@@ -29,14 +29,14 @@ const renderEmail = ({
 }) => {
   const otpBlock = otp
     ? `
-      <div style="margin:8px 0 20px;padding:16px 18px;background:${COLORS.muted};border:1px solid ${COLORS.line};border-radius:8px;text-align:center;">
-        <p style="margin:0 0 6px;font-size:12px;letter-spacing:0.08em;text-transform:uppercase;color:${COLORS.mutedText};">Verification code</p>
-        <p style="margin:0;font-size:28px;letter-spacing:0.18em;font-weight:700;color:${COLORS.primary};">${escapeHtml(otp)}</p>
+      <div style="margin:8px 0 12px;padding:14px 16px;background:${COLORS.muted};border:1px solid ${COLORS.line};border-radius:8px;text-align:center;">
+        <p style="margin:0 0 4px;font-size:12px;letter-spacing:0.08em;text-transform:uppercase;color:${COLORS.mutedText};">OTP</p>
+        <p style="margin:0;font-size:26px;letter-spacing:0.16em;font-weight:700;color:${COLORS.primary};">${escapeHtml(otp)}</p>
       </div>`
     : "";
 
   const noteBlock = note
-    ? `<p style="margin:18px 0 0;font-size:13px;line-height:1.6;color:${COLORS.mutedText};">${escapeHtml(note)}</p>`
+    ? `<p style="margin:12px 0 0;font-size:13px;line-height:1.5;color:${COLORS.mutedText};">${escapeHtml(note)}</p>`
     : "";
 
   return `<!DOCTYPE html>
@@ -49,22 +49,22 @@ const renderEmail = ({
             <tr>
               <td style="background:${COLORS.primary};padding:20px 28px;">
                 <p style="margin:0;font-family:Arial,Helvetica,sans-serif;font-size:18px;font-weight:700;letter-spacing:0.08em;color:${COLORS.white};">YUVADARPAN</p>
-                <p style="margin:4px 0 0;font-family:Arial,Helvetica,sans-serif;font-size:12px;color:#f7f3ef;">Community directory</p>
+<!--                <p style="margin:4px 0 0;font-family:Arial,Helvetica,sans-serif;font-size:12px;color:#f7f3ef;">Community directory</p>-->
               </td>
             </tr>
             <tr>
-              <td style="padding:28px;font-family:Arial,Helvetica,sans-serif;">
+              <td style="padding:22px 24px;font-family:Arial,Helvetica,sans-serif;">
                 ${greeting ? paragraph(greeting) : ""}
-                <h1 style="margin:0 0 16px;font-size:22px;line-height:1.35;color:${COLORS.primary};">${escapeHtml(heading)}</h1>
+                <h1 style="margin:0 0 10px;font-size:20px;line-height:1.3;color:${COLORS.primary};">${escapeHtml(heading)}</h1>
                 ${(paragraphs || []).map(paragraph).join("")}
                 ${otpBlock}
                 ${noteBlock}
-                <p style="margin:24px 0 0;font-size:15px;line-height:1.65;color:${COLORS.text};">Warm regards,<br/><strong>The Yuvadarpan team</strong></p>
+                <p style="margin:16px 0 0;font-size:14px;line-height:1.5;color:${COLORS.text};">Yuvadarpan team</p>
               </td>
             </tr>
             <tr>
-              <td style="padding:16px 28px;background:${COLORS.muted};border-top:1px solid ${COLORS.line};font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:1.55;color:${COLORS.mutedText};">
-                ${escapeHtml(footer || "This is an automated message from Yuvadarpan. Please do not reply to this email.")}
+              <td style="padding:12px 24px;background:${COLORS.muted};border-top:1px solid ${COLORS.line};font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:1.5;color:${COLORS.mutedText};">
+                ${escapeHtml(footer || "Do not reply to this email.")}
               </td>
             </tr>
           </table>
