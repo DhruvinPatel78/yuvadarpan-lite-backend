@@ -1,6 +1,7 @@
 const mongoose = require("mongoose");
 const mamaInfoSchema = new mongoose.Schema({
   name: String,
+  lastName: String,
   city: String,
   native: String,
 });
