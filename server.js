@@ -45,6 +45,7 @@ const districtRouter = require("./routes/district");
 const cityRouter = require("./routes/city");
 const samajRouter = require("./routes/samaj");
 const surnameRouter = require("./routes/surname");
+const gotraRouter = require("./routes/gotra");
 const roleRouter = require("./routes/role");
 const shortlistRouter = require("./routes/shortlist");
 const { specs, swaggerUi } = require("./swagger");
@@ -99,6 +100,7 @@ app.use("/district", districtRouter);
 app.use("/city", cityRouter);
 app.use("/samaj", samajRouter);
 app.use("/surname", surnameRouter);
+app.use("/gotra", gotraRouter);
 app.use("/role", roleRouter);
 app.use("/shortlist", shortlistRouter);
 
