@@ -1,11 +1,17 @@
 const mongoose = require("mongoose");
 const mamaInfoSchema = new mongoose.Schema({
   name: String,
+  lastName: String,
   city: String,
   native: String,
 });
+const educationSchema = new mongoose.Schema({
+  education: String,
+  fieldOfStudy: String,
+});
 const contactInfoSchema = new mongoose.Schema({
   name: String,
+  lastName: String,
   phone: Number,
   relation: String,
 });
@@ -70,10 +76,7 @@ const yuvaListSchema = new mongoose.Schema({
   },
   mamaInfo: mamaInfoSchema,
   contactInfo: contactInfoSchema,
-  education: {
-    type: String,
-    // required: true,
-  },
+  education: educationSchema,
   bloodGroup: {
     type: String,
     // required: true,
@@ -91,6 +94,7 @@ const yuvaListSchema = new mongoose.Schema({
   grandFatherName: String,
   email: String,
   YSKno: String,
+  abroadStudy: String,
   weight: {
     type: String,
     required: true,

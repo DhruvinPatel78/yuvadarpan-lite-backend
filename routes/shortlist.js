@@ -31,7 +31,7 @@ const errorCheck = (req, res) => {
   if (req.hasOwnProperty("error")) {
     const { message } = req.error;
     res.status(401).send({
-      message: message === "no-token" ? "unauthenticated" : "token-expired",
+      message: message === "no-token" ? "Please sign in." : "Session expired. Sign in again.",
     });
     return true;
   }
@@ -45,7 +45,7 @@ const requireRegularUser = (req, res) => {
     return true;
   }
   if (!isRegularUser(req.user?.role)) {
-    res.status(403).json({ message: "not-allowed" });
+    res.status(403).json({ message: "You cannot do this." });
     return true;
   }
   return false;
@@ -115,11 +115,11 @@ router.post("/", async (req, res) => {
   }
   const yuvaId = String(req.body?.yuvaId || "").trim();
   if (!yuvaId) {
-    return res.status(400).json({ message: "yuva-id-required" });
+    return res.status(400).json({ message: "Select a profile first." });
   }
   const yuva = await Yuvalist.findOne(idOrObjectIdFilter(yuvaId));
   if (!yuva) {
-    return res.status(404).json({ message: "yuva-not-found" });
+    return res.status(404).json({ message: "Profile not found." });
   }
   const storedId = String(yuva._id);
   try {
@@ -136,7 +136,7 @@ router.post("/", async (req, res) => {
     );
   } catch (e) {
     if (e.code !== 11000) {
-      return res.status(500).json({ message: "failed-to-shortlist" });
+      return res.status(500).json({ message: "Could not shortlist." });
     }
   }
   res.status(200).json({ message: "shortlisted", yuvaId: storedId });
@@ -148,7 +148,7 @@ router.delete("/:yuvaId", async (req, res) => {
   }
   const yuvaId = String(req.params.yuvaId || "").trim();
   if (!yuvaId) {
-    return res.status(400).json({ message: "yuva-id-required" });
+    return res.status(400).json({ message: "Select a profile first." });
   }
   const yuva = await Yuvalist.findOne(idOrObjectIdFilter(yuvaId));
   const ids = [...new Set([yuvaId, ...(yuva ? yuvaKeys(yuva) : [])])];

@@ -39,7 +39,7 @@ const errorCheck = (req, res) => {
   if (req.hasOwnProperty("error")) {
     const { message } = req.error;
     res.status(401).send({
-      message: message === "no-token" ? "unauthenticated" : "token-expired",
+      message: message === "no-token" ? "Please sign in." : "Session expired. Sign in again.",
     });
     return true;
   } else {
@@ -86,7 +86,7 @@ router.post("/upload", upload.single("image"), async (req, res) => {
         message: "image-upload-successfully",
       });
     } catch (error) {
-      res.status(500).json({ message: "failed-to-upload" });
+      res.status(500).json({ message: "Could not upload image." });
     }
   }
 });

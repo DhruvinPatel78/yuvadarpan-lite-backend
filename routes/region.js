@@ -66,7 +66,7 @@ const errorCheck = (req, res) => {
   if (req.hasOwnProperty("error")) {
     const { message } = req.error;
     res.status(401).send({
-      message: message === "no-token" ? "unauthenticated" : "token-expired",
+      message: message === "no-token" ? "Please sign in." : "Session expired. Sign in again.",
     });
     return true;
   } else {
@@ -178,7 +178,7 @@ router.post("/add", async (req, res) => {
     isDistrictManager(req.user?.role) ||
     isRegionManager(req.user?.role)
   ) {
-    return res.status(403).json({ message: "not-allowed" });
+    return res.status(403).json({ message: "You cannot do this." });
   }
   const data = req.body;
   if (isStateManager(req.user?.role)) {
@@ -189,7 +189,7 @@ router.post("/add", async (req, res) => {
       !stateId ||
       (data.state_id && !stateKeys.includes(String(data.state_id)))
     ) {
-      return res.status(403).json({ message: "not-allowed" });
+      return res.status(403).json({ message: "You cannot do this." });
     }
     data.state_id = stateId;
   }
@@ -201,7 +201,7 @@ router.post("/add", async (req, res) => {
       !countryId ||
       (data.country_id && !countryKeys.includes(String(data.country_id)))
     ) {
-      return res.status(403).json({ message: "not-allowed" });
+      return res.status(403).json({ message: "You cannot do this." });
     }
     data.country_id = countryId;
   }
@@ -227,7 +227,7 @@ router.delete("/delete", async (req, res) => {
     isDistrictManager(req.user?.role) ||
     isRegionManager(req.user?.role)
   ) {
-    return res.status(403).json({ message: "not-allowed" });
+    return res.status(403).json({ message: "You cannot do this." });
   }
   const data = req.body;
   const query = idsFilter(data.regions);
@@ -263,7 +263,7 @@ router.patch("/update/:id", async (req, res) => {
     isDistrictManager(req.user?.role) ||
     isRegionManager(req.user?.role)
   ) {
-    return res.status(403).json({ message: "not-allowed" });
+    return res.status(403).json({ message: "You cannot do this." });
   }
   const { id } = req.params;
   const payload = { ...req.body };
@@ -279,10 +279,10 @@ router.patch("/update/:id", async (req, res) => {
     };
     const allowed = await Region.findOne(filter);
     if (!allowed) {
-      return res.status(403).json({ message: "not-allowed" });
+      return res.status(403).json({ message: "You cannot do this." });
     }
     if (payload.state_id && !stateKeys.includes(String(payload.state_id))) {
-      return res.status(403).json({ message: "not-allowed" });
+      return res.status(403).json({ message: "You cannot do this." });
     }
   }
   if (isCountryManager(req.user?.role)) {
@@ -298,10 +298,10 @@ router.patch("/update/:id", async (req, res) => {
     };
     const allowed = await Region.findOne(filter);
     if (!allowed) {
-      return res.status(403).json({ message: "not-allowed" });
+      return res.status(403).json({ message: "You cannot do this." });
     }
     if (payload.country_id && !countryKeys.includes(String(payload.country_id))) {
-      return res.status(403).json({ message: "not-allowed" });
+      return res.status(403).json({ message: "You cannot do this." });
     }
   }
   await Region.updateOne(

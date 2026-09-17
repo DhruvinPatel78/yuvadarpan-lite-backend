@@ -8,6 +8,8 @@ const OTP = require("../models/OTP");
 const Region = require("../models/region");
 const { v4: uuidv4 } = require("uuid");
 const { sendNotification } = require("../utils/fcm");
+const { notifyAccountEvent, notifyStatusChange } = require("../utils/accountMail");
+const appMessages = require("../utils/appMessages");
 const notification = require("../data/locale/notifications.json");
 const { idOrObjectIdFilter } = require("../utils/childCount");
 const {
@@ -36,37 +38,46 @@ const { attachLinkedRoute } = require("../utils/linkedRecords");
 
 const verifyToken = (req, res, next) => {
   const authHeader = req.headers.authorization;
-  if (authHeader) {
-    jwt.verify(
-      authHeader.replace("Bearer", ""),
+  if (!authHeader) {
+    req.error = { message: "no-token" };
+    return next();
+  }
+  try {
+    const decoded = jwt.verify(
+      String(authHeader).replace(/^Bearer\s+/i, "").trim(),
       process.env.JWT_SECRET,
-      (error, res) => {
-        if (res) {
-          req.user = {
-            email: res.email,
-            role: res.role,
-            id: res.id,
-          };
-        } else {
-          req.error = {
-            message: error.name,
-          };
-        }
-      },
     );
-  } else {
-    req.error = {
-      message: "no-token",
+    req.user = {
+      email: decoded.email,
+      role: decoded.role,
+      id: decoded.id,
     };
+  } catch (error) {
+    req.error = { message: error.name };
   }
   next();
+};
+
+const createUniqueOtp = async () => {
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    const otp = OtpGenerator.generate(6, {
+      upperCaseAlphabets: false,
+      lowerCaseAlphabets: false,
+      specialChars: false,
+    });
+    const exists = await OTP.findOne({ otp }).lean();
+    if (!exists) {
+      return otp;
+    }
+  }
+  throw new Error("otp-generate-failed");
 };
 
 const errorCheck = (req, res) => {
   if (req.hasOwnProperty("error")) {
     const { message } = req.error;
     res.status(401).send({
-      message: message === "no-token" ? "unauthenticated" : "token-expired",
+      message: message === "no-token" ? appMessages.unauthenticated : appMessages.tokenExpired,
     });
     return true;
   } else {
@@ -81,7 +92,7 @@ router.get("/me", async (req, res) => {
   if (!errorCheck(req, res)) {
     const user = await findAccountByTokenId(req.user.id);
     if (!user) {
-      return res.status(404).json({ message: "User not found" });
+      return res.status(404).json({ message: appMessages.userNotFound });
     }
     const safeUser = user.toObject ? user.toObject() : { ...user };
     delete safeUser.password;
@@ -639,7 +650,7 @@ router.post("/add", async (req, res) => {
       user.role = user.role.value || user.role.id || "USER";
     }
     if (!user.password) {
-      return res.status(400).json({ message: "password-required" });
+      return res.status(400).json({ message: appMessages.passwordRequired });
     }
     user.password = await bcrypt.hash(user.password, 10);
     const Email = user.email
@@ -658,10 +669,10 @@ router.post("/add", async (req, res) => {
     if (emailExist || mobileExist) {
       const errorMessage =
         emailExist && mobileExist
-          ? "Email-and-Mobile-is-already-exist"
+          ? appMessages.emailAndMobileExist
           : emailExist
-            ? "Email-is-already-exist"
-            : "Mobile-is-already-exist";
+            ? appMessages.emailExists
+            : appMessages.mobileExists;
       return res.status(409).json({ message: errorMessage });
     }
     const actorRole = req.user?.role;
@@ -680,7 +691,7 @@ router.post("/add", async (req, res) => {
       const manager = await findAccountByTokenId(req.user.id);
       const samajIds = await samajIdsForCity(await getManagerCityId(manager));
       if (!user.localSamaj || !samajIds.includes(String(user.localSamaj))) {
-        return res.status(403).json({ message: "not-allowed" });
+        return res.status(403).json({ message: appMessages.notAllowed });
       }
     }
     if (actorRole === "DISTRICT_MANAGER") {
@@ -689,7 +700,7 @@ router.post("/add", async (req, res) => {
         await getManagerDistrictId(manager),
       );
       if (!user.localSamaj || !samajIds.includes(String(user.localSamaj))) {
-        return res.status(403).json({ message: "not-allowed" });
+        return res.status(403).json({ message: appMessages.notAllowed });
       }
     }
     if (actorRole === "REGION_MANAGER") {
@@ -698,7 +709,7 @@ router.post("/add", async (req, res) => {
       const regionKeys = await regionValueKeys(regionId);
       const samajIds = await samajIdsForRegion(regionId);
       if (!user.localSamaj || !samajIds.includes(String(user.localSamaj))) {
-        return res.status(403).json({ message: "not-allowed" });
+        return res.status(403).json({ message: appMessages.notAllowed });
       }
       if (regionId) {
         user.region = regionKeys[0] || regionId;
@@ -710,10 +721,10 @@ router.post("/add", async (req, res) => {
       const samajIds = await samajIdsForState(stateId);
       const regionIds = await regionIdsForState(stateId);
       if (!user.localSamaj || !samajIds.includes(String(user.localSamaj))) {
-        return res.status(403).json({ message: "not-allowed" });
+        return res.status(403).json({ message: appMessages.notAllowed });
       }
       if (user.region && regionIds.length && !regionIds.includes(String(user.region))) {
-        return res.status(403).json({ message: "not-allowed" });
+        return res.status(403).json({ message: appMessages.notAllowed });
       }
     }
     if (actorRole === "COUNTRY_MANAGER") {
@@ -722,10 +733,10 @@ router.post("/add", async (req, res) => {
       const samajIds = await samajIdsForCountry(countryId);
       const regionIds = await regionIdsForCountry(countryId);
       if (!user.localSamaj || !samajIds.includes(String(user.localSamaj))) {
-        return res.status(403).json({ message: "not-allowed" });
+        return res.status(403).json({ message: appMessages.notAllowed });
       }
       if (user.region && regionIds.length && !regionIds.includes(String(user.region))) {
-        return res.status(403).json({ message: "not-allowed" });
+        return res.status(403).json({ message: appMessages.notAllowed });
       }
     }
     const dbUser = await User.create({
@@ -739,9 +750,13 @@ router.post("/add", async (req, res) => {
       allowed: isAdmin,
       fcmToken: user.fcmToken || null,
     });
+    await notifyAccountEvent(
+      dbUser,
+      isAdmin ? "AccountVerifySuccess" : "RegistrationSuccess",
+    );
     res.send(dbUser);
   } catch (e) {
-    res.status(400).json({ message: e.message || "failed-to-create-user" });
+    res.status(400).json({ message: e.message || appMessages.createFailed });
   }
 });
 
@@ -764,10 +779,10 @@ router.post("/signup", async (req, res) => {
   if (emailExist || mobileExist) {
     const errorMessage =
       emailExist && mobileExist
-        ? "Email-and-Mobile-is-already-exist"
+        ? appMessages.emailAndMobileExist
         : emailExist
-          ? "Email-is-already-exist"
-          : "Mobile-is-already-exist";
+          ? appMessages.emailExists
+          : appMessages.mobileExists;
 
       user?.fcmToken && await sendNotification(
       user?.fcmToken,
@@ -789,17 +804,7 @@ router.post("/signup", async (req, res) => {
       fcmToken: user.fcmToken || null,
       language: user.language || "en",
     });
-    // if (dbUser.fcmToken) {
-    //   try {
-    //     await sendNotification(
-    //       dbUser.fcmToken,
-    //       "Registration Successful",
-    //       "Welcome to Yuvadarpan! Your registration was successful.",
-    //     );
-    //   } catch (err) {
-    //     console.error("FCM notification error:", err);
-    //   }
-    // }
+    await notifyAccountEvent(dbUser, "RegistrationSuccess");
     res.send(dbUser);
   }
 });
@@ -818,27 +823,21 @@ router.post("/sendOtp", async (req, res) => {
     : {};
   const dbUser = await User.findOne(Email).lean();
 
-  if (dbUser) {
-    let otp = OtpGenerator.generate(6, {
-      upperCaseAlphabets: false,
-      lowerCaseAlphabets: false,
-      specialChars: false,
+  if (!dbUser?.email) {
+    return res.status(404).send({ message: appMessages.emailInvalid });
+  }
+  try {
+    const otp = await createUniqueOtp();
+    await OTP.deleteMany({ email: dbUser.email });
+    await OTP.create({ email: dbUser.email, otp });
+    await OTP.sendVerificationEmail(String(dbUser.email).trim(), otp, dbUser);
+    return res.status(200).json({
+      message: appMessages.otpSent,
     });
-    const result = await OTP.findOne({ otp: otp });
-    while (result) {
-      otp = OtpGenerator.generate(6, {
-        upperCaseAlphabets: false,
-      });
-    }
-    const otpPayload = { email, otp };
-    await OTP.deleteMany({ email });
-    await OTP.create(otpPayload);
-    res.status(200).json({
-      message: `otp-sent-successfully`,
-      otp,
-    });
-  } else {
-    res.status(404).send({ message: "email-invalid" });
+  } catch (error) {
+    console.error("sendOtp", error.message);
+    await OTP.deleteMany({ email: dbUser.email });
+    return res.status(502).json({ message: appMessages.otpEmailFailed });
   }
 });
 
@@ -857,25 +856,25 @@ router.post("/verifyOtp", async (req, res) => {
     : {};
   const isUserExit = await User.findOne(Email).lean();
   if (isUserExit) {
-    const isOtpExist = await OTP.findOne({ otp: otp, email: email });
+    const isOtpExist = await OTP.findOne({ otp: otp, email: isUserExit.email });
     if (isOtpExist) {
       const now = new Date();
       const createdAt = new Date(isOtpExist.createdAt);
       const diffSeconds = (now - createdAt) / 1000;
       if (diffSeconds > 300) {
         await OTP.findByIdAndDelete(isOtpExist?.id);
-        return res.status(410).send({ message: "otp-expired" });
+        return res.status(410).send({ message: appMessages.otpExpired });
       }
       await OTP.updateOne(
         { _id: isOtpExist._id },
         { $set: { verified: true } },
       );
-      res.status(200).send({ message: "otp-verify-successfully" });
+      res.status(200).send({ message: appMessages.otpVerified });
     } else {
-      return res.status(404).send({ message: "invalid-otp" });
+      return res.status(404).send({ message: appMessages.otpInvalid });
     }
   } else {
-    res.status(404).send({ message: "email-invalid" });
+    res.status(404).send({ message: appMessages.emailInvalid });
   }
 });
 
@@ -909,13 +908,13 @@ router.post("/signIn", async (req, res) => {
         delete safeUser._id;
         res.send({ data: safeUser, token });
       } else {
-        res.status(403).send({ message: "your-account-is-not-verified" });
+        res.status(403).send({ message: appMessages.accountNotApproved });
       }
     } else {
-      res.status(401).send({ message: "password-or-email-incorrect" });
+      res.status(401).send({ message: appMessages.loginFailed });
     }
   } else {
-    res.status(401).send({ message: "password-or-email-incorrect" });
+    res.status(401).send({ message: appMessages.loginFailed });
   }
 });
 
@@ -925,29 +924,34 @@ router.patch("/update/:id", async (req, res) => {
     const payload = { ...req.body };
 
     // Get current user data before update
-    const currentUser = await User.findById(id).lean();
+    const currentUser =
+      (await User.findById(id).lean()) ||
+      (await User.findOne(idOrObjectIdFilter(String(id))).lean());
 
     if (!currentUser) {
-      return res.status(404).json({ message: "User not found" });
+      return res.status(404).json({ message: appMessages.userNotFound });
     }
 
     const isSelf =
       String(req.user.id) === String(id) ||
       String(req.user.id) === String(currentUser._id) ||
       String(req.user.id) === String(currentUser.id);
+    const actorIsAdmin = String(req.user.role || "").toUpperCase() === "ADMIN";
 
     if (isSelf) {
       delete payload.role;
-      delete payload.allowed;
-      delete payload.active;
       delete payload.password;
+      if (!actorIsAdmin) {
+        delete payload.allowed;
+        delete payload.active;
+      }
     }
 
     if (!isSelf && req.user.role === "SAMAJ_MANAGER") {
       const manager = await findAccountByTokenId(req.user.id);
       const samajKeys = await samajValueKeys(manager?.localSamaj);
       if (!samajKeys.includes(String(currentUser.localSamaj))) {
-        return res.status(403).json({ message: "not-allowed" });
+        return res.status(403).json({ message: appMessages.notAllowed });
       }
       delete payload.role;
     }
@@ -958,13 +962,13 @@ router.patch("/update/:id", async (req, res) => {
         ...(await usersInManagerCityQuery(manager)),
       });
       if (!inCity) {
-        return res.status(403).json({ message: "not-allowed" });
+        return res.status(403).json({ message: appMessages.notAllowed });
       }
       delete payload.role;
       if (payload.localSamaj) {
         const samajIds = await samajIdsForCity(await getManagerCityId(manager));
         if (!samajIds.includes(String(payload.localSamaj))) {
-          return res.status(403).json({ message: "not-allowed" });
+          return res.status(403).json({ message: appMessages.notAllowed });
         }
       }
     }
@@ -975,7 +979,7 @@ router.patch("/update/:id", async (req, res) => {
         ...(await usersInManagerDistrictQuery(manager)),
       });
       if (!inDistrict) {
-        return res.status(403).json({ message: "not-allowed" });
+        return res.status(403).json({ message: appMessages.notAllowed });
       }
       delete payload.role;
       if (payload.localSamaj) {
@@ -983,7 +987,7 @@ router.patch("/update/:id", async (req, res) => {
           await getManagerDistrictId(manager),
         );
         if (!samajIds.includes(String(payload.localSamaj))) {
-          return res.status(403).json({ message: "not-allowed" });
+          return res.status(403).json({ message: appMessages.notAllowed });
         }
       }
     }
@@ -994,7 +998,7 @@ router.patch("/update/:id", async (req, res) => {
         ...(await usersInManagerRegionQuery(manager)),
       });
       if (!inRegion) {
-        return res.status(403).json({ message: "not-allowed" });
+        return res.status(403).json({ message: appMessages.notAllowed });
       }
       delete payload.role;
       if (payload.localSamaj) {
@@ -1002,7 +1006,7 @@ router.patch("/update/:id", async (req, res) => {
           await getManagerRegionId(manager),
         );
         if (!samajIds.includes(String(payload.localSamaj))) {
-          return res.status(403).json({ message: "not-allowed" });
+          return res.status(403).json({ message: appMessages.notAllowed });
         }
       }
     }
@@ -1013,7 +1017,7 @@ router.patch("/update/:id", async (req, res) => {
         ...(await usersInManagerStateQuery(manager)),
       });
       if (!inState) {
-        return res.status(403).json({ message: "not-allowed" });
+        return res.status(403).json({ message: appMessages.notAllowed });
       }
       delete payload.role;
       if (payload.localSamaj) {
@@ -1021,7 +1025,7 @@ router.patch("/update/:id", async (req, res) => {
           await getManagerStateId(manager),
         );
         if (!samajIds.includes(String(payload.localSamaj))) {
-          return res.status(403).json({ message: "not-allowed" });
+          return res.status(403).json({ message: appMessages.notAllowed });
         }
       }
     }
@@ -1032,7 +1036,7 @@ router.patch("/update/:id", async (req, res) => {
         ...(await usersInManagerCountryQuery(manager)),
       });
       if (!inCountry) {
-        return res.status(403).json({ message: "not-allowed" });
+        return res.status(403).json({ message: appMessages.notAllowed });
       }
       delete payload.role;
       if (payload.localSamaj) {
@@ -1040,7 +1044,7 @@ router.patch("/update/:id", async (req, res) => {
           await getManagerCountryId(manager),
         );
         if (!samajIds.includes(String(payload.localSamaj))) {
-          return res.status(403).json({ message: "not-allowed" });
+          return res.status(403).json({ message: appMessages.notAllowed });
         }
       }
     }
@@ -1049,25 +1053,39 @@ router.patch("/update/:id", async (req, res) => {
       payload.password = await bcrypt.hash(payload.password, 10);
     }
 
-    const isAcceptStatusChanged =
-      payload.hasOwnProperty("allowed") &&
-      currentUser.allowed !== payload.allowed;
+    const statusPayload = {};
+    if (
+      Object.prototype.hasOwnProperty.call(payload, "allowed") &&
+      Boolean(currentUser.allowed) !== Boolean(payload.allowed)
+    ) {
+      statusPayload.allowed = payload.allowed;
+    }
+    if (
+      Object.prototype.hasOwnProperty.call(payload, "active") &&
+      Boolean(currentUser.active) !== Boolean(payload.active)
+    ) {
+      statusPayload.active = payload.active;
+    }
 
     await User.updateOne(
-      { _id: id },
-      { ...payload, updatedAt: new Date(), updatedBy: req?.user.id },
+      { _id: currentUser._id },
+      {
+        $set: {
+          ...payload,
+          updatedAt: new Date(),
+          updatedBy: req?.user.id,
+        },
+      },
     );
 
-    if (isAcceptStatusChanged && currentUser?.fcmToken) {
-      let lang = currentUser?.language;
-      await sendNotification(
-        currentUser?.fcmToken,
-        payload?.allowed ? notification.AccountVerifySuccess.title[lang] : notification.AccountVerifyFail.title[lang],
-        payload?.allowed ? notification.AccountVerifySuccess.body[lang] : notification.AccountVerifyFail.body[lang],
+    if (Object.keys(statusPayload).length) {
+      await notifyStatusChange(
+        { ...currentUser, ...statusPayload },
+        statusPayload,
       );
     }
 
-    res.status(200).json({ message: "Updated Successfully" });
+    res.status(200).json({ message: appMessages.updated });
   }
 });
 
@@ -1100,34 +1118,34 @@ router.delete("/delete", async (req, res) => {
       Object.assign(query, await usersInManagerCountryQuery(manager));
     }
     await User.deleteMany(query);
-    res.status(200).json({ message: "Delete Successfully" });
+    res.status(200).json({ message: appMessages.deleted });
   }
 });
 
 router.post("/sendChangePasswordOtp", async (req, res) => {
-  if (!errorCheck(req, res)) {
+  if (errorCheck(req, res)) {
+    return;
+  }
+  try {
     const manager = await findAccountByTokenId(req.user.id);
     if (!manager?.email) {
-      return res.status(404).send({ message: "email-invalid" });
+      return res.status(404).send({ message: appMessages.emailInvalid });
     }
-    const email = manager.email;
-    let otp = OtpGenerator.generate(6, {
-      upperCaseAlphabets: false,
-      lowerCaseAlphabets: false,
-      specialChars: false,
-    });
-    let result = await OTP.findOne({ otp });
-    while (result) {
-      otp = OtpGenerator.generate(6, {
-        upperCaseAlphabets: false,
-        lowerCaseAlphabets: false,
-        specialChars: false,
-      });
-      result = await OTP.findOne({ otp });
-    }
+    const email = String(manager.email || "").trim();
+    const otp = await createUniqueOtp();
     await OTP.deleteMany({ email });
     await OTP.create({ email, otp });
-    res.status(200).json({ message: "otp-sent-successfully" });
+    await OTP.sendVerificationEmail(email, otp, manager);
+    return res.status(200).json({ message: appMessages.otpSent });
+  } catch (error) {
+    console.error("sendChangePasswordOtp", error.message);
+    if (req.user?.id) {
+      const manager = await findAccountByTokenId(req.user.id);
+      if (manager?.email) {
+        await OTP.deleteMany({ email: manager.email });
+      }
+    }
+    return res.status(502).json({ message: appMessages.otpEmailFailed });
   }
 });
 
@@ -1135,24 +1153,24 @@ router.patch("/changePassword", async (req, res) => {
   if (!errorCheck(req, res)) {
     const { password } = req.body;
     if (!password) {
-      return res.status(400).json({ message: "password-required" });
+      return res.status(400).json({ message: appMessages.passwordRequired });
     }
     const manager = await findAccountByTokenId(req.user.id);
     if (!manager?.email) {
-      return res.status(404).send({ message: "email-invalid" });
+      return res.status(404).send({ message: appMessages.emailInvalid });
     }
     const verifiedOtp = await OTP.findOne({
       email: manager.email,
       verified: true,
     });
     if (!verifiedOtp) {
-      return res.status(403).json({ message: "otp-not-verified" });
+      return res.status(403).json({ message: appMessages.otpNotVerified });
     }
     const now = new Date();
     const createdAt = new Date(verifiedOtp.createdAt);
     if ((now - createdAt) / 1000 > 300) {
       await OTP.findByIdAndDelete(verifiedOtp._id);
-      return res.status(410).send({ message: "otp-expired" });
+      return res.status(410).send({ message: appMessages.otpExpired });
     }
     const newPassword = await bcrypt.hash(password, 10);
     await User.updateOne(
@@ -1166,7 +1184,8 @@ router.patch("/changePassword", async (req, res) => {
       },
     );
     await OTP.deleteMany({ email: manager.email });
-    res.status(200).send({ message: "password-update-successfully" });
+    await notifyAccountEvent(manager, "PasswordChanged");
+    res.status(200).send({ message: appMessages.passwordUpdated });
   }
 });
 
@@ -1197,9 +1216,10 @@ router.patch("/forgotPassword", async (req, res) => {
         },
       },
     );
-    res.status(200).send({ message: "password-update-successfully" });
+    await notifyAccountEvent(isUserExits, "PasswordChanged");
+    res.status(200).send({ message: appMessages.passwordUpdated });
   } else {
-    res.status(404).send({ message: "email-invalid" });
+    res.status(404).send({ message: appMessages.emailInvalid });
   }
 });
 
@@ -1241,23 +1261,21 @@ router.patch("/approveRejectMany", async (req, res) => {
           allowed: isAccepting,
           active: isAccepting,
           updatedAt: new Date(),
-          updatedBy: req.body.id,
+          updatedBy: req.user.id,
         },
       },
     );
 
-    const notificationPromises = usersToUpdate.map(async (user) => {
-      const lang = user?.language;
-      await sendNotification(
-        user?.fcmToken,
-        isAccepting ? notification.AccountVerifySuccess.title[lang] : notification.AccountVerifyFail.title[lang],
-        isAccepting ? notification.AccountVerifySuccess.body[lang] : notification.AccountVerifyFail.body[lang],
-      );
-    });
+    await Promise.all(
+      usersToUpdate.map((user) =>
+        notifyAccountEvent(
+          user,
+          isAccepting ? "AccountVerifySuccess" : "AccountVerifyFail",
+        ),
+      ),
+    );
 
-    await Promise.all(notificationPromises);
-
-    res.status(200).json({ message: "Updated Successfully" });
+    res.status(200).json({ message: appMessages.updated });
   }
 });
 
@@ -1268,7 +1286,7 @@ router.patch("/fcmTokenUpdate/:id", async (req, res) => {
   const currentUser = await User.findById(id).lean();
 
   if (!currentUser) {
-    return res.status(404).json({ message: "User not found" });
+    return res.status(404).json({ message: appMessages.userNotFound });
   }
 
   if (payload?.password) {
@@ -1279,7 +1297,7 @@ router.patch("/fcmTokenUpdate/:id", async (req, res) => {
     { _id: id },
     { ...payload, updatedAt: new Date(), updatedBy: id },
   );
-  res.status(200).json({ message: "fcmToken Updated Successfully" });
+  res.status(200).json({ message: appMessages.updated });
 });
 
 router.post("/test", async (req, res) => {

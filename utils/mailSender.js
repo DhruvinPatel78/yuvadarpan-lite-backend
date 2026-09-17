@@ -1,29 +1,91 @@
 const nodemailer = require("nodemailer");
 
-const mailSender = async (email, title, body) => {
+const getMailAuth = () => {
+  const rawUser = String(
+    process.env.MAIL_USER || process.env.SMTP_USER || "",
+  ).trim();
+  const user = rawUser.includes("@")
+    ? rawUser
+    : String(process.env.USER || "").includes("@")
+      ? String(process.env.USER).trim()
+      : "";
+  const pass = String(
+    process.env.MAIL_PASSWORD ||
+      process.env.SMTP_PASSWORD ||
+      process.env.PASSWORD ||
+      "",
+  ).trim();
+  if (!user.includes("@") || !pass) {
+    throw new Error("mail-not-configured");
+  }
+  return { user, pass };
+};
+
+let transporter;
+
+const resetTransporter = () => {
+  if (!transporter) {
+    return;
+  }
   try {
-    const transporter = nodemailer.createTransport({
-      host: "smtp.gmail.email",
-      service: "gmail",
-      port: 587,
-      secure: false, // Use `true` for port 465, `false` for all other ports
-      auth: {
-        user:process.env.USER,
-        pass:process.env.PASSWORD,
-      },
-    });
-    return await transporter.sendMail({
-      from: {
-        name: "YUVADRAPAN",
-        address: process.env.USER,
-      }, // sender address
-      to: [`${email}`], // list of receivers
-      subject: title, // Subject line
-      text: title, // plain text body
-      html: body, // html body
-    });
+    transporter.close();
   } catch (error) {
-    console.log(error.message);
+    // ignore close errors so the next send can rebuild the connection
+  }
+  transporter = null;
+};
+
+const getTransporter = () => {
+  if (transporter) {
+    return transporter;
+  }
+  const auth = getMailAuth();
+  transporter = nodemailer.createTransport({
+    service: "gmail",
+    auth,
+    connectionTimeout: 12000,
+    greetingTimeout: 12000,
+    socketTimeout: 20000,
+  });
+  return transporter;
+};
+
+const toPlainText = (html, title) => {
+  const text = String(html || "")
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/p>/gi, "\n")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/\s+\n/g, "\n")
+    .replace(/\n\s+/g, "\n")
+    .replace(/[ \t]{2,}/g, " ")
+    .trim();
+  return text || title;
+};
+
+const mailSender = async (email, title, body) => {
+  const to = String(email || "").trim();
+  if (!to.includes("@")) {
+    throw new Error("invalid-mail-recipient");
+  }
+  const auth = getMailAuth();
+  try {
+    const info = await getTransporter().sendMail({
+      from: `"Yuvadarpan" <${auth.user}>`,
+      to,
+      replyTo: auth.user,
+      subject: title,
+      text: toPlainText(body, title),
+      html: body,
+    });
+    if (info.rejected && info.rejected.length) {
+      throw new Error(`mail-rejected:${info.rejected.join(",")}`);
+    }
+    console.log("mail-sent", to, info.messageId || info.response);
+    return info;
+  } catch (error) {
+    resetTransporter();
+    console.error("mail-failed", to, error.message);
+    throw error;
   }
 };
 
