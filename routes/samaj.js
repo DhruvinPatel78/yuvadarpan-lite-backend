@@ -2,6 +2,7 @@ const express = require("express");
 const router = express.Router();
 const Samaj = require("../models/samaj");
 const City = require("../models/city");
+const Region = require("../models/region");
 const jwt = require("jsonwebtoken");
 const { findChildrenByParent, findByAnyId, idOrObjectIdFilter, idsFilter, sanitizeUpdatePayload } = require("../utils/childCount");
 const {
@@ -200,9 +201,7 @@ router.get("/listByDistrict/:id", async (req, res) => {
 // Get samaj by region id
 router.get("/listByRegion/:id", async (req, res) => {
   const { id } = req.params;
-  const SamajData = await Samaj.find({
-    region_id: { $eq: id },
-  });
+  const SamajData = await findChildrenByParent(Region, Samaj, id, "region_id");
   res.status(200).json(SamajData);
 });
 
