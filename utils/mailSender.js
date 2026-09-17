@@ -1,9 +1,21 @@
 const nodemailer = require("nodemailer");
 
 const getMailAuth = () => {
-  const user = process.env.MAIL_USER || process.env.SMTP_USER;
-  const pass = process.env.MAIL_PASSWORD || process.env.SMTP_PASSWORD;
-  if (!user || !pass) {
+  const rawUser = String(
+    process.env.MAIL_USER || process.env.SMTP_USER || "",
+  ).trim();
+  const user = rawUser.includes("@")
+    ? rawUser
+    : String(process.env.USER || "").includes("@")
+      ? String(process.env.USER).trim()
+      : "";
+  const pass = String(
+    process.env.MAIL_PASSWORD ||
+      process.env.SMTP_PASSWORD ||
+      process.env.PASSWORD ||
+      "",
+  ).trim();
+  if (!user.includes("@") || !pass) {
     throw new Error("mail-not-configured");
   }
   return { user, pass };
@@ -11,38 +23,70 @@ const getMailAuth = () => {
 
 let transporter;
 
+const resetTransporter = () => {
+  if (!transporter) {
+    return;
+  }
+  try {
+    transporter.close();
+  } catch (error) {
+    // ignore close errors so the next send can rebuild the connection
+  }
+  transporter = null;
+};
+
 const getTransporter = () => {
   if (transporter) {
     return transporter;
   }
   const auth = getMailAuth();
   transporter = nodemailer.createTransport({
-    host: "smtp.gmail.com",
-    port: 587,
-    secure: false,
+    service: "gmail",
     auth,
-    connectionTimeout: 10000,
-    greetingTimeout: 10000,
-    socketTimeout: 15000,
+    connectionTimeout: 12000,
+    greetingTimeout: 12000,
+    socketTimeout: 20000,
   });
   return transporter;
 };
 
+const toPlainText = (html, title) => {
+  const text = String(html || "")
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/p>/gi, "\n")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/\s+\n/g, "\n")
+    .replace(/\n\s+/g, "\n")
+    .replace(/[ \t]{2,}/g, " ")
+    .trim();
+  return text || title;
+};
+
 const mailSender = async (email, title, body) => {
-  if (!email || !String(email).includes("@")) {
+  const to = String(email || "").trim();
+  if (!to.includes("@")) {
     throw new Error("invalid-mail-recipient");
   }
   const auth = getMailAuth();
-  return getTransporter().sendMail({
-    from: {
-      name: "Yuvadarpan",
-      address: auth.user,
-    },
-    to: email,
-    subject: title,
-    text: `${title}\n\nPlease use this verification code: ${String(body).replace(/<[^>]+>/g, " ").trim()}`,
-    html: body,
-  });
+  try {
+    const info = await getTransporter().sendMail({
+      from: `"Yuvadarpan" <${auth.user}>`,
+      to,
+      replyTo: auth.user,
+      subject: title,
+      text: toPlainText(body, title),
+      html: body,
+    });
+    if (info.rejected && info.rejected.length) {
+      throw new Error(`mail-rejected:${info.rejected.join(",")}`);
+    }
+    console.log("mail-sent", to, info.messageId || info.response);
+    return info;
+  } catch (error) {
+    resetTransporter();
+    console.error("mail-failed", to, error.message);
+    throw error;
+  }
 };
 
 module.exports = mailSender;

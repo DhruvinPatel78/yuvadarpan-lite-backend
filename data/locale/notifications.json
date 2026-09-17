@@ -1,28 +1,232 @@
 {
   "AccountVerifySuccess": {
     "title": {
-      "en": "Account Verification Success",
-      "gu": "એકાઉન્ટ ચકાસણી સફળ થઈ."
+      "en": "Your Yuvadarpan account is approved",
+      "gu": "તમારું યુવાદર્પણ એકાઉન્ટ મંજૂર થયું છે"
+    },
+    "heading": {
+      "en": "Your account is ready",
+      "gu": "તમારું એકાઉન્ટ તૈયાર છે"
+    },
+    "greeting": {
+      "en": "Dear {{name}},",
+      "gu": "પ્રિય {{name}},"
+    },
+    "paragraphs": {
+      "en": [
+        "Your signup request has been reviewed and approved.",
+        "You can now sign in to Yuvadarpan and access the community directory."
+      ],
+      "gu": [
+        "તમારી સાઇનઅપ વિનંતીની સમીક્ષા થઈ છે અને તે મંજૂર કરવામાં આવી છે.",
+        "હવે તમે યુવાદર્પણમાં સાઇન ઇન કરીને કમ્યુનિટી ડિરેક્ટરીનો ઉપયોગ કરી શકો છો."
+      ]
+    },
+    "note": {
+      "en": "If you did not create this account, please contact Yuvadarpan support.",
+      "gu": "જો તમે આ એકાઉન્ટ બનાવ્યું ન હોય, તો કૃપા કરીને યુવાદર્પણ સપોર્ટનો સંપર્ક કરો."
     },
     "body": {
-      "en": "Now you can signin and use Yuvadarpan.",
-      "gu": "હવે તમે લોગ ઇન કરી શકો છો અને યુવાદર્પણનો ઉપયોગ કરી શકો છો."
+      "en": "Your signup request has been approved. You can now sign in and use Yuvadarpan.",
+      "gu": "તમારી સાઇનઅપ વિનંતી મંજૂર કરવામાં આવી છે. હવે તમે લોગ ઇન કરીને યુવાદર્પણનો ઉપયોગ કરી શકો છો."
     }
   },
   "AccountVerifyFail": {
     "title": {
-      "en": "Account Verification Fail",
-      "gu": "એકાઉન્ટ ચકાસણી નિષ્ફળ ગઈ"
+      "en": "Update on your Yuvadarpan signup request",
+      "gu": "તમારી યુવાદર્પણ સાઇનઅપ વિનંતી અંગે અપડેટ"
+    },
+    "heading": {
+      "en": "We could not approve your request",
+      "gu": "અમે તમારી વિનંતી મંજૂર કરી શક્યા નથી"
+    },
+    "greeting": {
+      "en": "Dear {{name}},",
+      "gu": "પ્રિય {{name}},"
+    },
+    "paragraphs": {
+      "en": [
+        "Thank you for your interest in Yuvadarpan.",
+        "After review, we are unable to approve your signup request at this time."
+      ],
+      "gu": [
+        "યુવાદર્પણમાં રસ દાખવવા બદલ આભાર.",
+        "સમીક્ષા પછી, અમે હાલમાં તમારી સાઇનઅપ વિનંતી મંજૂર કરી શકતા નથી."
+      ]
+    },
+    "note": {
+      "en": "For more information, please contact your local samaj administrator or Yuvadarpan support.",
+      "gu": "વધુ માહિતી માટે કૃપા કરીને તમારા સ્થાનિક સમાજ સંચાલક અથવા યુવાદર્પણ સપોર્ટનો સંપર્ક કરો."
     },
     "body": {
-      "en": "Verification required. Please get in touch with the contact support.",
-      "gu": "ચકાસણી જરૂરી છે. કૃપા કરીને સપોર્ટનો સંપર્ક કરો."
+      "en": "Your signup request was not approved. Please contact your local samaj administrator or Yuvadarpan support if you need help.",
+      "gu": "તમારી સાઇનઅપ વિનંતી મંજૂર થઈ નથી. મદદ માટે કૃપા કરીને તમારા સ્થાનિક સમાજ સંચાલક અથવા યુવાદર્પણ સપોર્ટનો સંપર્ક કરો."
+    }
+  },
+  "RegistrationSuccess": {
+    "title": {
+      "en": "We received your Yuvadarpan registration",
+      "gu": "તમારું યુવાદર્પણ રજીસ્ટ્રેશન અમને પ્રાપ્ત થયું છે"
+    },
+    "heading": {
+      "en": "Your registration is under review",
+      "gu": "તમારું રજીસ્ટ્રેશન સમીક્ષા હેઠળ છે"
+    },
+    "greeting": {
+      "en": "Dear {{name}},",
+      "gu": "પ્રિય {{name}},"
+    },
+    "paragraphs": {
+      "en": [
+        "Thank you for registering with Yuvadarpan.",
+        "We have received your details and your account is now pending verification by the administrator."
+      ],
+      "gu": [
+        "યુવાદર્પણ સાથે રજીસ્ટર થવા બદલ આભાર.",
+        "તમારી વિગતો અમને પ્રાપ્ત થઈ છે અને તમારું એકાઉન્ટ હવે સંચાલક દ્વારા ચકાસણી માટે બાકી છે."
+      ]
+    },
+    "note": {
+      "en": "You will receive another email as soon as your account is approved. You can sign in after that.",
+      "gu": "તમારું એકાઉન્ટ મંજૂર થતાં જ તમને બીજી ઇમેઇલ મળશે. ત્યારબાદ તમે સાઇન ઇન કરી શકશો."
+    },
+    "body": {
+      "en": "Thank you for registering. Your details have been submitted and we will notify you once your account is verified.",
+      "gu": "રજીસ્ટ્રેશન બદલ આભાર. તમારી વિગતો સબમિટ થઈ ગઈ છે અને એકાઉન્ટ ચકાસાયા પછી અમે તમને જાણ કરીશું."
+    }
+  },
+  "PasswordOtp": {
+    "title": {
+      "en": "Your Yuvadarpan verification code",
+      "gu": "તમારો યુવાદર્પણ વેરિફિકેશન કોડ"
+    },
+    "heading": {
+      "en": "Verify your identity",
+      "gu": "તમારી ઓળખ ચકાસો"
+    },
+    "greeting": {
+      "en": "Dear {{name}},",
+      "gu": "પ્રિય {{name}},"
+    },
+    "paragraphs": {
+      "en": [
+        "Use the one-time code below to continue changing your password.",
+        "This code is valid for 5 minutes. Do not share it with anyone."
+      ],
+      "gu": [
+        "તમારો પાસવર્ડ બદલવા માટે નીચેનો વન-ટાઇમ કોડ વાપરો.",
+        "આ કોડ 5 મિનિટ માટે માન્ય છે. તે કોઈની સાથે શેર કરશો નહીં."
+      ]
+    },
+    "note": {
+      "en": "If you did not request this code, you can ignore this email.",
+      "gu": "જો તમે આ કોડની વિનંતી કરી ન હોય, તો આ ઇમેઇલને અવગણી શકો છો."
+    },
+    "body": {
+      "en": "Use this one-time code to continue. It is valid for 5 minutes.",
+      "gu": "આગળ વધવા માટે આ વન-ટાઇમ કોડ વાપરો. તે 5 મિનિટ માટે માન્ય છે."
+    }
+  },
+  "AccountActive": {
+    "title": {
+      "en": "Your Yuvadarpan account is active",
+      "gu": "તમારું યુવાદર્પણ એકાઉન્ટ સક્રિય છે"
+    },
+    "heading": {
+      "en": "Your account has been activated",
+      "gu": "તમારું એકાઉન્ટ સક્રિય કરવામાં આવ્યું છે"
+    },
+    "greeting": {
+      "en": "Dear {{name}},",
+      "gu": "પ્રિય {{name}},"
+    },
+    "paragraphs": {
+      "en": [
+        "Your Yuvadarpan account is now active.",
+        "You can sign in and continue using the community directory."
+      ],
+      "gu": [
+        "તમારું યુવાદર્પણ એકાઉન્ટ હવે સક્રિય છે.",
+        "તમે સાઇન ઇન કરીને કમ્યુનિટી ડિરેક્ટરીનો ઉપયોગ ચાલુ રાખી શકો છો."
+      ]
+    },
+    "note": {
+      "en": "If you did not expect this change, please contact Yuvadarpan support.",
+      "gu": "જો તમે આ ફેરફારની અપેક્ષા ન હોય, તો કૃપા કરીને યુવાદર્પણ સપોર્ટનો સંપર્ક કરો."
+    },
+    "body": {
+      "en": "Your Yuvadarpan account is now active. You can sign in and use the directory.",
+      "gu": "તમારું યુવાદર્પણ એકાઉન્ટ હવે સક્રિય છે. તમે સાઇન ઇન કરીને ડિરેક્ટરીનો ઉપયોગ કરી શકો છો."
+    }
+  },
+  "AccountDeactive": {
+    "title": {
+      "en": "Your Yuvadarpan account has been deactivated",
+      "gu": "તમારું યુવાદર્પણ એકાઉન્ટ નિષ્ક્રિય કરવામાં આવ્યું છે"
+    },
+    "heading": {
+      "en": "Your account is currently inactive",
+      "gu": "તમારું એકાઉન્ટ હાલમાં નિષ્ક્રિય છે"
+    },
+    "greeting": {
+      "en": "Dear {{name}},",
+      "gu": "પ્રિય {{name}},"
+    },
+    "paragraphs": {
+      "en": [
+        "Your Yuvadarpan account has been deactivated by an administrator.",
+        "You will not be able to sign in until the account is activated again."
+      ],
+      "gu": [
+        "સંચાલક દ્વારા તમારું યુવાદર્પણ એકાઉન્ટ નિષ્ક્રિય કરવામાં આવ્યું છે.",
+        "એકાઉન્ટ ફરી સક્રિય ન થાય ત્યાં સુધી તમે સાઇન ઇન કરી શકશો નહીં."
+      ]
+    },
+    "note": {
+      "en": "For help, please contact your local samaj administrator or Yuvadarpan support.",
+      "gu": "મદદ માટે કૃપા કરીને તમારા સ્થાનિક સમાજ સંચાલક અથવા યુવાદર્પણ સપોર્ટનો સંપર્ક કરો."
+    },
+    "body": {
+      "en": "Your Yuvadarpan account has been deactivated. Contact support if you need help.",
+      "gu": "તમારું યુવાદર્પણ એકાઉન્ટ નિષ્ક્રિય કરવામાં આવ્યું છે. મદદ માટે સપોર્ટનો સંપર્ક કરો."
+    }
+  },
+  "PasswordChanged": {
+    "title": {
+      "en": "Your Yuvadarpan password was changed",
+      "gu": "તમારો યુવાદર્પણ પાસવર્ડ બદલાયો છે"
+    },
+    "heading": {
+      "en": "Password updated successfully",
+      "gu": "પાસવર્ડ સફળતાપૂર્વક અપડેટ થયો"
+    },
+    "greeting": {
+      "en": "Dear {{name}},",
+      "gu": "પ્રિય {{name}},"
+    },
+    "paragraphs": {
+      "en": [
+        "Your Yuvadarpan account password was changed successfully.",
+        "If you made this change, no further action is needed."
+      ],
+      "gu": [
+        "તમારા યુવાદર્પણ એકાઉન્ટનો પાસવર્ડ સફળતાપૂર્વક બદલાયો છે.",
+        "જો આ ફેરફાર તમે કર્યો હોય, તો વધુ કાર્યવાહીની જરૂર નથી."
+      ]
+    },
+    "note": {
+      "en": "If you did not change your password, please reset it immediately and contact support.",
+      "gu": "જો તમે પાસવર્ડ બદલ્યો ન હોય, તો તરત જ તેને રીસેટ કરો અને સપોર્ટનો સંપર્ક કરો."
+    },
+    "body": {
+      "en": "Your Yuvadarpan password was changed successfully.",
+      "gu": "તમારો યુવાદર્પણ પાસવર્ડ સફળતાપૂર્વક બદલાયો છે."
     }
   },
   "RegistrationFail": {
     "title": {
-      "en": "Account Already Exist",
-      "gu": "ખાતું પહેલેથી જ અસ્તિત્વમાં છે."
+      "en": "Account already exists",
+      "gu": "ખાતું પહેલેથી જ અસ્તિત્વમાં છે"
     }
   }
 }

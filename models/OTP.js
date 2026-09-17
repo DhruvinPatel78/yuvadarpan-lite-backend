@@ -1,5 +1,5 @@
 const mongoose = require("mongoose");
-const mailSender = require("../utils/mailSender");
+const { sendOtpEmail } = require("../utils/accountMail");
 
 const OTPSchema = new mongoose.Schema({
   email: {
@@ -21,18 +21,8 @@ const OTPSchema = new mongoose.Schema({
   },
 });
 
-async function sendVerificationEmail(email, otp) {
-  await mailSender(
-    email,
-    "Yuvadarpan verification code",
-    `<h1 style="font-weight: bold">Verification code</h1>
-            <p>Please use the verification code below to change your password</p>
-            <p style="font-weight: bold;font-size: 18px;">${otp}</p>
-            <p>If you didn't request this, you can ignore this email</p>
-            <span>Thanks,</span>
-            <span>The Yuvadarpan team</span>
-            `,
-  );
+async function sendVerificationEmail(email, otp, user) {
+  await sendOtpEmail(user || email, otp);
 }
 
 const OTP = mongoose.model("OTP", OTPSchema);

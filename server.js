@@ -10,8 +10,25 @@ const envFile =
       : ".env";
 const envPath = path.join(__dirname, envFile);
 const loadedEnv = fs.existsSync(envPath) ? envPath : path.join(__dirname, ".env");
-require("dotenv").config({ path: loadedEnv });
+const dotenv = require("dotenv");
+dotenv.config({ path: loadedEnv });
+try {
+  const parsed = dotenv.parse(fs.readFileSync(loadedEnv));
+  if (parsed.MAIL_USER) process.env.MAIL_USER = parsed.MAIL_USER;
+  if (parsed.MAIL_PASSWORD) process.env.MAIL_PASSWORD = parsed.MAIL_PASSWORD;
+  if (parsed.SMTP_USER) process.env.SMTP_USER = parsed.SMTP_USER;
+  if (parsed.SMTP_PASSWORD) process.env.SMTP_PASSWORD = parsed.SMTP_PASSWORD;
+} catch (error) {
+  console.error("env-mail-load-failed", error.message);
+}
+const mailUser = String(process.env.MAIL_USER || process.env.SMTP_USER || "").trim();
 console.log("APP_ENV =>", appEnv || "local", "| env file =>", path.basename(loadedEnv));
+console.log(
+  "mail-configured =>",
+  mailUser.includes("@") && Boolean(String(process.env.MAIL_PASSWORD || process.env.SMTP_PASSWORD || "").trim())
+    ? mailUser
+    : "no",
+);
 
 const express = require("express");
 const mongoose = require("mongoose");
