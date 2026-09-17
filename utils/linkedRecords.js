@@ -348,7 +348,7 @@ const attachLinkedRoute = (router, entity, errorCheck) => {
       res.status(200).json(result);
     } catch (error) {
       console.error("linked records failed", error);
-      res.status(500).json({ mapped: false, groups: [], message: "failed-to-fetch" });
+      res.status(500).json({ mapped: false, groups: [], message: "Could not load data." });
     }
   });
 };

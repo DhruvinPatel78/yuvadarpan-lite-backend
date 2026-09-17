@@ -55,7 +55,7 @@ const getRoleFromRequest = (req) => getTokenPayload(req)?.role || null;
 
 const rejectSamajManagerWrite = (req, res) => {
   if (isSamajManager(getRoleFromRequest(req))) {
-    res.status(403).json({ message: "not-allowed" });
+    res.status(403).json({ message: "You cannot do this." });
     return true;
   }
   return false;
@@ -63,7 +63,7 @@ const rejectSamajManagerWrite = (req, res) => {
 
 const rejectLocationMasterWrite = (req, res) => {
   if (isLocationMasterReadOnly(getRoleFromRequest(req))) {
-    res.status(403).json({ message: "not-allowed" });
+    res.status(403).json({ message: "You cannot do this." });
     return true;
   }
   return false;
@@ -683,7 +683,7 @@ const constrainYuvaLocationForManager = async (user, payload = {}) => {
     return { ok: true, data };
   }
   if (!isLocationMasterReadOnly(role)) {
-    return { ok: false, status: 403, message: "not-allowed" };
+    return { ok: false, status: 403, message: "You cannot do this." };
   }
   const manager = await findAccountByTokenId(user.id);
   if (role === "SAMAJ_MANAGER") {
@@ -701,7 +701,7 @@ const constrainYuvaLocationForManager = async (user, payload = {}) => {
     data.city = cityId;
     const samajIds = await samajIdsForCity(cityId);
     if (data.localSamaj && !containsId(samajIds, data.localSamaj)) {
-      return { ok: false, status: 403, message: "not-allowed" };
+      return { ok: false, status: 403, message: "You cannot do this." };
     }
     return { ok: true, data };
   }
@@ -713,11 +713,11 @@ const constrainYuvaLocationForManager = async (user, payload = {}) => {
     data.district = districtId;
     const cityIds = await cityIdsForDistrict(districtId);
     if (data.city && !containsId(cityIds, data.city)) {
-      return { ok: false, status: 403, message: "not-allowed" };
+      return { ok: false, status: 403, message: "You cannot do this." };
     }
     const samajIds = await samajIdsForDistrict(districtId);
     if (data.localSamaj && !containsId(samajIds, data.localSamaj)) {
-      return { ok: false, status: 403, message: "not-allowed" };
+      return { ok: false, status: 403, message: "You cannot do this." };
     }
     return { ok: true, data };
   }
@@ -729,15 +729,15 @@ const constrainYuvaLocationForManager = async (user, payload = {}) => {
     data.region = regionId;
     const districtIds = await districtIdsForRegion(regionId);
     if (data.district && !containsId(districtIds, data.district)) {
-      return { ok: false, status: 403, message: "not-allowed" };
+      return { ok: false, status: 403, message: "You cannot do this." };
     }
     const cityIds = await cityIdsForRegion(regionId);
     if (data.city && !containsId(cityIds, data.city)) {
-      return { ok: false, status: 403, message: "not-allowed" };
+      return { ok: false, status: 403, message: "You cannot do this." };
     }
     const samajIds = await samajIdsForRegion(regionId);
     if (data.localSamaj && !containsId(samajIds, data.localSamaj)) {
-      return { ok: false, status: 403, message: "not-allowed" };
+      return { ok: false, status: 403, message: "You cannot do this." };
     }
     return { ok: true, data };
   }
@@ -749,19 +749,19 @@ const constrainYuvaLocationForManager = async (user, payload = {}) => {
     data.state = stateId;
     const regionIds = await regionIdsForState(stateId);
     if (data.region && !containsId(regionIds, data.region)) {
-      return { ok: false, status: 403, message: "not-allowed" };
+      return { ok: false, status: 403, message: "You cannot do this." };
     }
     const districtIds = await districtIdsForState(stateId);
     if (data.district && !containsId(districtIds, data.district)) {
-      return { ok: false, status: 403, message: "not-allowed" };
+      return { ok: false, status: 403, message: "You cannot do this." };
     }
     const cityIds = await cityIdsForState(stateId);
     if (data.city && !containsId(cityIds, data.city)) {
-      return { ok: false, status: 403, message: "not-allowed" };
+      return { ok: false, status: 403, message: "You cannot do this." };
     }
     const samajIds = await samajIdsForState(stateId);
     if (data.localSamaj && !containsId(samajIds, data.localSamaj)) {
-      return { ok: false, status: 403, message: "not-allowed" };
+      return { ok: false, status: 403, message: "You cannot do this." };
     }
     return { ok: true, data };
   }
@@ -773,27 +773,27 @@ const constrainYuvaLocationForManager = async (user, payload = {}) => {
     data.country = countryId;
     const stateIds = await stateIdsForCountry(countryId);
     if (data.state && !containsId(stateIds, data.state)) {
-      return { ok: false, status: 403, message: "not-allowed" };
+      return { ok: false, status: 403, message: "You cannot do this." };
     }
     const regionIds = await regionIdsForCountry(countryId);
     if (data.region && !containsId(regionIds, data.region)) {
-      return { ok: false, status: 403, message: "not-allowed" };
+      return { ok: false, status: 403, message: "You cannot do this." };
     }
     const districtIds = await districtIdsForCountry(countryId);
     if (data.district && !containsId(districtIds, data.district)) {
-      return { ok: false, status: 403, message: "not-allowed" };
+      return { ok: false, status: 403, message: "You cannot do this." };
     }
     const cityIds = await cityIdsForCountry(countryId);
     if (data.city && !containsId(cityIds, data.city)) {
-      return { ok: false, status: 403, message: "not-allowed" };
+      return { ok: false, status: 403, message: "You cannot do this." };
     }
     const samajIds = await samajIdsForCountry(countryId);
     if (data.localSamaj && !containsId(samajIds, data.localSamaj)) {
-      return { ok: false, status: 403, message: "not-allowed" };
+      return { ok: false, status: 403, message: "You cannot do this." };
     }
     return { ok: true, data };
   }
-  return { ok: false, status: 403, message: "not-allowed" };
+  return { ok: false, status: 403, message: "You cannot do this." };
 };
 
 module.exports = {

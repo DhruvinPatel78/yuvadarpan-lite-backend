@@ -1,0 +1,26 @@
+const messages = {
+  noToken: "Please sign in.",
+  unauthenticated: "Please sign in.",
+  tokenExpired: "Session expired. Sign in again.",
+  notAllowed: "You cannot do this.",
+  userNotFound: "User not found.",
+  passwordRequired: "Password is required.",
+  createFailed: "Could not create user.",
+  emailAndMobileExist: "Email and mobile already exist.",
+  emailExists: "Email already exists.",
+  mobileExists: "Mobile already exists.",
+  emailInvalid: "Email not found.",
+  otpSent: "OTP sent.",
+  otpEmailFailed: "Could not send OTP.",
+  otpExpired: "OTP expired.",
+  otpVerified: "OTP verified.",
+  otpInvalid: "Invalid OTP.",
+  otpNotVerified: "Verify OTP first.",
+  accountNotApproved: "Account is not approved yet.",
+  loginFailed: "Email or password is incorrect.",
+  passwordUpdated: "Password updated.",
+  updated: "Updated.",
+  deleted: "Deleted.",
+};
+
+module.exports = messages;

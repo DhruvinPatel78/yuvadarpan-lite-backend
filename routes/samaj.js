@@ -67,7 +67,7 @@ const errorCheck = (req, res) => {
   if (req.hasOwnProperty("error")) {
     const { message } = req.error;
     res.status(401).send({
-      message: message === "no-token" ? "unauthenticated" : "token-expired",
+      message: message === "no-token" ? "Please sign in." : "Session expired. Sign in again.",
     });
     return true;
   } else {
@@ -215,7 +215,7 @@ router.post("/add", async (req, res) => {
       const cityId = await getManagerCityId(manager);
       const cityKeys = await cityValueKeys(cityId);
       if (!cityId || (data.city_id && !cityKeys.includes(String(data.city_id)))) {
-        return res.status(403).json({ message: "not-allowed" });
+        return res.status(403).json({ message: "You cannot do this." });
       }
       data.city_id = cityId;
     }
@@ -227,7 +227,7 @@ router.post("/add", async (req, res) => {
         !districtId ||
         (data.district_id && !districtKeys.includes(String(data.district_id)))
       ) {
-        return res.status(403).json({ message: "not-allowed" });
+        return res.status(403).json({ message: "You cannot do this." });
       }
       data.district_id = districtId;
     }
@@ -239,7 +239,7 @@ router.post("/add", async (req, res) => {
         !regionId ||
         (data.region_id && !regionKeys.includes(String(data.region_id)))
       ) {
-        return res.status(403).json({ message: "not-allowed" });
+        return res.status(403).json({ message: "You cannot do this." });
       }
       data.region_id = regionId;
     }
@@ -251,7 +251,7 @@ router.post("/add", async (req, res) => {
         !stateId ||
         (data.state_id && !stateKeys.includes(String(data.state_id)))
       ) {
-        return res.status(403).json({ message: "not-allowed" });
+        return res.status(403).json({ message: "You cannot do this." });
       }
       data.state_id = stateId;
     }
@@ -263,7 +263,7 @@ router.post("/add", async (req, res) => {
         !countryId ||
         (data.country_id && !countryKeys.includes(String(data.country_id)))
       ) {
-        return res.status(403).json({ message: "not-allowed" });
+        return res.status(403).json({ message: "You cannot do this." });
       }
       data.country_id = countryId;
     }
@@ -339,10 +339,10 @@ router.patch("/update/:id", async (req, res) => {
       };
       const allowed = await Samaj.findOne(filter);
       if (!allowed) {
-        return res.status(403).json({ message: "not-allowed" });
+        return res.status(403).json({ message: "You cannot do this." });
       }
       if (payload.city_id && !cityKeys.includes(String(payload.city_id))) {
-        return res.status(403).json({ message: "not-allowed" });
+        return res.status(403).json({ message: "You cannot do this." });
       }
     }
     if (isDistrictManager(req.user?.role)) {
@@ -358,13 +358,13 @@ router.patch("/update/:id", async (req, res) => {
       };
       const allowed = await Samaj.findOne(filter);
       if (!allowed) {
-        return res.status(403).json({ message: "not-allowed" });
+        return res.status(403).json({ message: "You cannot do this." });
       }
       if (
         payload.district_id &&
         !districtKeys.includes(String(payload.district_id))
       ) {
-        return res.status(403).json({ message: "not-allowed" });
+        return res.status(403).json({ message: "You cannot do this." });
       }
     }
     if (isRegionManager(req.user?.role)) {
@@ -378,10 +378,10 @@ router.patch("/update/:id", async (req, res) => {
       };
       const allowed = await Samaj.findOne(filter);
       if (!allowed) {
-        return res.status(403).json({ message: "not-allowed" });
+        return res.status(403).json({ message: "You cannot do this." });
       }
       if (payload.region_id && !regionKeys.includes(String(payload.region_id))) {
-        return res.status(403).json({ message: "not-allowed" });
+        return res.status(403).json({ message: "You cannot do this." });
       }
     }
     if (isStateManager(req.user?.role)) {
@@ -395,10 +395,10 @@ router.patch("/update/:id", async (req, res) => {
       };
       const allowed = await Samaj.findOne(filter);
       if (!allowed) {
-        return res.status(403).json({ message: "not-allowed" });
+        return res.status(403).json({ message: "You cannot do this." });
       }
       if (payload.state_id && !stateKeys.includes(String(payload.state_id))) {
-        return res.status(403).json({ message: "not-allowed" });
+        return res.status(403).json({ message: "You cannot do this." });
       }
     }
     if (isCountryManager(req.user?.role)) {
@@ -414,10 +414,10 @@ router.patch("/update/:id", async (req, res) => {
       };
       const allowed = await Samaj.findOne(filter);
       if (!allowed) {
-        return res.status(403).json({ message: "not-allowed" });
+        return res.status(403).json({ message: "You cannot do this." });
       }
       if (payload.country_id && !countryKeys.includes(String(payload.country_id))) {
-        return res.status(403).json({ message: "not-allowed" });
+        return res.status(403).json({ message: "You cannot do this." });
       }
     }
     await Samaj.updateOne(
