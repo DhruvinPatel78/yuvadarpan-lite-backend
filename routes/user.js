@@ -8,6 +8,7 @@ const OTP = require("../models/OTP");
 const Region = require("../models/region");
 const { v4: uuidv4 } = require("uuid");
 const { sendNotification } = require("../utils/fcm");
+const { notifyAccountEvent, notifyStatusChange } = require("../utils/accountMail");
 const notification = require("../data/locale/notifications.json");
 const { idOrObjectIdFilter } = require("../utils/childCount");
 const {
@@ -748,6 +749,10 @@ router.post("/add", async (req, res) => {
       allowed: isAdmin,
       fcmToken: user.fcmToken || null,
     });
+    await notifyAccountEvent(
+      dbUser,
+      isAdmin ? "AccountVerifySuccess" : "RegistrationSuccess",
+    );
     res.send(dbUser);
   } catch (e) {
     res.status(400).json({ message: e.message || "failed-to-create-user" });
@@ -798,17 +803,7 @@ router.post("/signup", async (req, res) => {
       fcmToken: user.fcmToken || null,
       language: user.language || "en",
     });
-    // if (dbUser.fcmToken) {
-    //   try {
-    //     await sendNotification(
-    //       dbUser.fcmToken,
-    //       "Registration Successful",
-    //       "Welcome to Yuvadarpan! Your registration was successful.",
-    //     );
-    //   } catch (err) {
-    //     console.error("FCM notification error:", err);
-    //   }
-    // }
+    await notifyAccountEvent(dbUser, "RegistrationSuccess");
     res.send(dbUser);
   }
 });
@@ -834,7 +829,7 @@ router.post("/sendOtp", async (req, res) => {
     const otp = await createUniqueOtp();
     await OTP.deleteMany({ email: dbUser.email });
     await OTP.create({ email: dbUser.email, otp });
-    await OTP.sendVerificationEmail(dbUser.email, otp);
+    await OTP.sendVerificationEmail(String(dbUser.email).trim(), otp, dbUser);
     return res.status(200).json({
       message: "otp-sent-successfully",
     });
@@ -860,7 +855,7 @@ router.post("/verifyOtp", async (req, res) => {
     : {};
   const isUserExit = await User.findOne(Email).lean();
   if (isUserExit) {
-    const isOtpExist = await OTP.findOne({ otp: otp, email: email });
+    const isOtpExist = await OTP.findOne({ otp: otp, email: isUserExit.email });
     if (isOtpExist) {
       const now = new Date();
       const createdAt = new Date(isOtpExist.createdAt);
@@ -928,7 +923,9 @@ router.patch("/update/:id", async (req, res) => {
     const payload = { ...req.body };
 
     // Get current user data before update
-    const currentUser = await User.findById(id).lean();
+    const currentUser =
+      (await User.findById(id).lean()) ||
+      (await User.findOne(idOrObjectIdFilter(String(id))).lean());
 
     if (!currentUser) {
       return res.status(404).json({ message: "User not found" });
@@ -938,12 +935,15 @@ router.patch("/update/:id", async (req, res) => {
       String(req.user.id) === String(id) ||
       String(req.user.id) === String(currentUser._id) ||
       String(req.user.id) === String(currentUser.id);
+    const actorIsAdmin = String(req.user.role || "").toUpperCase() === "ADMIN";
 
     if (isSelf) {
       delete payload.role;
-      delete payload.allowed;
-      delete payload.active;
       delete payload.password;
+      if (!actorIsAdmin) {
+        delete payload.allowed;
+        delete payload.active;
+      }
     }
 
     if (!isSelf && req.user.role === "SAMAJ_MANAGER") {
@@ -1052,21 +1052,35 @@ router.patch("/update/:id", async (req, res) => {
       payload.password = await bcrypt.hash(payload.password, 10);
     }
 
-    const isAcceptStatusChanged =
-      payload.hasOwnProperty("allowed") &&
-      currentUser.allowed !== payload.allowed;
+    const statusPayload = {};
+    if (
+      Object.prototype.hasOwnProperty.call(payload, "allowed") &&
+      Boolean(currentUser.allowed) !== Boolean(payload.allowed)
+    ) {
+      statusPayload.allowed = payload.allowed;
+    }
+    if (
+      Object.prototype.hasOwnProperty.call(payload, "active") &&
+      Boolean(currentUser.active) !== Boolean(payload.active)
+    ) {
+      statusPayload.active = payload.active;
+    }
 
     await User.updateOne(
-      { _id: id },
-      { ...payload, updatedAt: new Date(), updatedBy: req?.user.id },
+      { _id: currentUser._id },
+      {
+        $set: {
+          ...payload,
+          updatedAt: new Date(),
+          updatedBy: req?.user.id,
+        },
+      },
     );
 
-    if (isAcceptStatusChanged && currentUser?.fcmToken) {
-      let lang = currentUser?.language;
-      await sendNotification(
-        currentUser?.fcmToken,
-        payload?.allowed ? notification.AccountVerifySuccess.title[lang] : notification.AccountVerifyFail.title[lang],
-        payload?.allowed ? notification.AccountVerifySuccess.body[lang] : notification.AccountVerifyFail.body[lang],
+    if (Object.keys(statusPayload).length) {
+      await notifyStatusChange(
+        { ...currentUser, ...statusPayload },
+        statusPayload,
       );
     }
 
@@ -1116,11 +1130,11 @@ router.post("/sendChangePasswordOtp", async (req, res) => {
     if (!manager?.email) {
       return res.status(404).send({ message: "email-invalid" });
     }
-    const email = manager.email;
+    const email = String(manager.email || "").trim();
     const otp = await createUniqueOtp();
     await OTP.deleteMany({ email });
     await OTP.create({ email, otp });
-    await OTP.sendVerificationEmail(email, otp);
+    await OTP.sendVerificationEmail(email, otp, manager);
     return res.status(200).json({ message: "otp-sent-successfully" });
   } catch (error) {
     console.error("sendChangePasswordOtp", error.message);
@@ -1169,6 +1183,7 @@ router.patch("/changePassword", async (req, res) => {
       },
     );
     await OTP.deleteMany({ email: manager.email });
+    await notifyAccountEvent(manager, "PasswordChanged");
     res.status(200).send({ message: "password-update-successfully" });
   }
 });
@@ -1200,6 +1215,7 @@ router.patch("/forgotPassword", async (req, res) => {
         },
       },
     );
+    await notifyAccountEvent(isUserExits, "PasswordChanged");
     res.status(200).send({ message: "password-update-successfully" });
   } else {
     res.status(404).send({ message: "email-invalid" });
@@ -1244,21 +1260,19 @@ router.patch("/approveRejectMany", async (req, res) => {
           allowed: isAccepting,
           active: isAccepting,
           updatedAt: new Date(),
-          updatedBy: req.body.id,
+          updatedBy: req.user.id,
         },
       },
     );
 
-    const notificationPromises = usersToUpdate.map(async (user) => {
-      const lang = user?.language;
-      await sendNotification(
-        user?.fcmToken,
-        isAccepting ? notification.AccountVerifySuccess.title[lang] : notification.AccountVerifyFail.title[lang],
-        isAccepting ? notification.AccountVerifySuccess.body[lang] : notification.AccountVerifyFail.body[lang],
-      );
-    });
-
-    await Promise.all(notificationPromises);
+    await Promise.all(
+      usersToUpdate.map((user) =>
+        notifyAccountEvent(
+          user,
+          isAccepting ? "AccountVerifySuccess" : "AccountVerifyFail",
+        ),
+      ),
+    );
 
     res.status(200).json({ message: "Updated Successfully" });
   }
