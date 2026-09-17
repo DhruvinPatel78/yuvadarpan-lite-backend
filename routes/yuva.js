@@ -36,7 +36,7 @@ const errorCheck = (req, res) => {
   if (req.hasOwnProperty("error")) {
     const { message } = req.error;
     res.status(401).send({
-      message: message === "no-token" ? "unauthenticated" : "token-expired",
+      message: message === "no-token" ? "Please sign in." : "Session expired. Sign in again.",
     });
     return true;
   } else {
@@ -63,7 +63,7 @@ router.post("/addYuva", async (req, res) => {
     const dbYuva = await Yuva.create(yuva);
     res.send(dbYuva);
   } else {
-    res.status(403).send({ message: "only-admin-can-create-yuva" });
+    res.status(403).send({ message: "Only admin can add this." });
   }
 });
 

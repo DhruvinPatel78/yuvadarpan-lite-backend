@@ -61,11 +61,11 @@ router.get("/public/:id", async (req, res) => {
   try {
     const yuva = await getPublicYuvaById(req.params.id);
     if (!yuva) {
-      return res.status(404).json({ message: "yuva-not-found" });
+      return res.status(404).json({ message: "Profile not found." });
     }
     res.status(200).json(yuva);
   } catch (e) {
-    res.status(500).json({ message: "failed-to-fetch" });
+    res.status(500).json({ message: "Could not load data." });
   }
 });
 
@@ -75,7 +75,7 @@ const errorCheck = (req, res) => {
   if (req.hasOwnProperty("error")) {
     const { message } = req.error;
     res.status(401).send({
-      message: message === "no-token" ? "unauthenticated" : "token-expired",
+      message: message === "no-token" ? "Please sign in." : "Session expired. Sign in again.",
     });
     return true;
   } else {
@@ -338,7 +338,7 @@ router.get("/list", async (req, res) => {
     await sendPagedYuvas(res, filter, page, limit);
   } catch (e) {
     console.error("yuva list failed", e);
-    res.status(500).json({ message: "failed-to-fetch" });
+    res.status(500).json({ message: "Could not load data." });
   }
 });
 
@@ -420,7 +420,7 @@ router.post("/addYuvaList", async (req, res) => {
     });
     res.send(dbYuvaList);
   } else {
-    res.status(403).send({ message: "only-admin-can-create-yuva" });
+    res.status(403).send({ message: "Only admin can add this." });
   }
 });
 
@@ -450,7 +450,7 @@ router.delete("/:id", async (req, res) => {
     const filter = mergeYuvaWriteFilter(idOrObjectIdFilter(req.params.id), scope);
     const allowed = await Yuvalist.findOne(filter);
     if (!allowed) {
-      return res.status(403).json({ message: "not-allowed" });
+      return res.status(403).json({ message: "You cannot do this." });
     }
     await deleteYuvaRecords(filter);
     res.status(200).json({ message: "Delete Successfully" });
@@ -465,7 +465,7 @@ router.patch("/update/:id", async (req, res) => {
     const allowed = await Yuvalist.findOne(filter);
     if (!allowed) {
       return res.status(isAdmin(req.user.role) ? 404 : 403).json({
-        message: isAdmin(req.user.role) ? "yuva-not-found" : "not-allowed",
+        message: isAdmin(req.user.role) ? "Profile not found." : "You cannot do this.",
       });
     }
     const constrained = await constrainYuvaLocationForManager(req.user, req.body);
