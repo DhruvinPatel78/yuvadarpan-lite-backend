@@ -32,23 +32,21 @@ const { attachLinkedRoute } = require("../utils/linkedRecords");
 const verifyToken = (req, res, next) => {
   const authHeader = req.headers.authorization;
   if (authHeader) {
-    jwt.verify(
-      authHeader.replace("Bearer ", ""),
-      process.env.JWT_SECRET,
-      (error, res) => {
-        if (res) {
-          req.user = {
-            email: res.email,
-            role: res.role,
-            id: res.id,
-          };
-        } else {
-          req.error = {
-            message: error.name,
-          };
-        }
-      },
-    );
+    try {
+      const decoded = jwt.verify(
+        authHeader.replace("Bearer ", ""),
+        process.env.JWT_SECRET
+      );
+      req.user = {
+        email: decoded.email,
+        role: decoded.role,
+        id: decoded.id,
+      };
+    } catch (error) {
+      req.error = {
+        message: error.name,
+      };
+    }
   } else {
     req.error = {
       message: "no-token",
@@ -401,26 +399,41 @@ router.get("/citylist", async (req, res) => {
 });
 
 router.post("/addYuvaList", async (req, res) => {
-  const data = req.body;
   const user = req.user;
-  if (isAdmin(user.role) || isLocationMasterReadOnly(user.role)) {
-    const constrained = await constrainYuvaLocationForManager(user, data);
-    if (!constrained.ok) {
-      return res.status(constrained.status).json({ message: constrained.message });
+  if (!(user && (isAdmin(user.role) || isLocationMasterReadOnly(user.role)))) {
+    return res.status(403).send({ message: "Only admin can add this." });
+  }
+  const isBulk = Array.isArray(req.body?.yuvas);
+  const items = isBulk ? req.body.yuvas : [req.body];
+  if (!items.length) {
+    return res.status(400).json({ message: "Add at least one Yuva." });
+  }
+  try {
+    const docs = [];
+    for (const data of items) {
+      const constrained = await constrainYuvaLocationForManager(user, data);
+      if (!constrained.ok) {
+        return res.status(constrained.status).json({ message: constrained.message });
+      }
+      docs.push({
+        ...constrained.data,
+        id: uuidv4().replace(/-/g, ""),
+        active: true,
+        createdAt: new Date(),
+        updatedAt: null,
+        createdBy: req.user.id,
+        updatedBy: null,
+      });
     }
-    const dbYuvaList = await Yuvalist.create({
-      ...constrained.data,
-      // id: crypto.randomUUID().replace(/-/g, ""),
-      id: uuidv4().replace(/-/g, ""),
-      active: true,
-      createdAt: new Date(),
-      updatedAt: null,
-      createdBy: req.user.id,
-      updatedBy: null,
-    });
-    res.send(dbYuvaList);
-  } else {
-    res.status(403).send({ message: "Only admin can add this." });
+    if (isBulk) {
+      const created = await Yuvalist.insertMany(docs);
+      return res.status(200).json({ data: created, count: created.length });
+    }
+    const created = await Yuvalist.create(docs[0]);
+    res.send(created);
+  } catch (e) {
+    console.error("add yuva failed", e);
+    res.status(500).json({ message: "Could not save Yuva." });
   }
 });
 

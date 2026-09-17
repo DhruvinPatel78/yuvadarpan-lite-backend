@@ -192,9 +192,12 @@ router.get("/list/:id", async (req, res) => {
 // Get samaj by district id
 router.get("/listByDistrict/:id", async (req, res) => {
   const { id } = req.params;
-  const SamajData = await Samaj.find({
-    district_id: { $eq: id },
-  });
+  const SamajData = await findChildrenByParent(
+    District,
+    Samaj,
+    id,
+    "district_id"
+  );
   res.status(200).json(SamajData);
 });
 
