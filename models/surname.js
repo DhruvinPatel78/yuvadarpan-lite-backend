@@ -15,7 +15,7 @@ const surNameSchema = new mongoose.Schema({
   },
   mainBranch: {
     type: String,
-    required: true,
+    default: "",
   },
   active: Boolean,
   createdAt: Date,
