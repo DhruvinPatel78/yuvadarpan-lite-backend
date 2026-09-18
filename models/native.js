@@ -18,8 +18,12 @@ const nativeSchema = new mongoose.Schema({
     toJSON: {
         virtuals: true,
         transform: (doc, ret) => {
+            const uuid = doc._doc?.id;
             ret.id = ret._id;
             delete ret._id;
+            if (uuid && String(uuid) !== String(ret.id)) {
+              ret.uuid = uuid;
+            }
             return ret;
         }
     }
