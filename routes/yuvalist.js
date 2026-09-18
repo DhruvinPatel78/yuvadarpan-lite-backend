@@ -5,7 +5,7 @@ const User = require("../models/user");
 const { v4: uuidv4 } = require('uuid');
 const { idsFilter, idOrObjectIdFilter, sanitizeUpdatePayload, findByAnyId } = require("../utils/childCount");
 const { deleteYuvaImages } = require("../utils/s3");
-const { getPublicYuvaById, pickYuvaFields, MEMBER_YUVA_SELECT, MEMBER_YUVA_KEYS } = require("../utils/yuvaPublic");
+const { getPublicYuvaById, pickYuvaFields, resolveYuvaLabels, MEMBER_YUVA_SELECT, MEMBER_YUVA_KEYS } = require("../utils/yuvaPublic");
 const { verifyToken, errorCheck } = require("../utils/auth");
 const { escapeRegex } = require("../utils/escapeRegex");
 const {
@@ -370,16 +370,27 @@ router.get("/get-all-list", async (req, res) => {
 });
 
 router.get("/list/:id", async (req, res) => {
-  if (!errorCheck(req, res)) {
+  if (errorCheck(req, res)) {
+    return;
+  }
+  try {
     const rows = await findByAnyId(Yuvalist, req.params.id);
     const dbYuva = Array.isArray(rows) ? rows[0] : rows;
     if (!dbYuva) {
       return res.status(404).json({ message: "Profile not found." });
     }
+    const labels = await resolveYuvaLabels(dbYuva);
     if (String(req.user.role).toUpperCase() === "USER") {
-      return res.json(pickYuvaFields(dbYuva, MEMBER_YUVA_KEYS));
+      const picked = pickYuvaFields(dbYuva, MEMBER_YUVA_KEYS);
+      picked.labels = labels;
+      return res.json(picked);
     }
-    res.json(dbYuva);
+    const json = typeof dbYuva.toJSON === "function" ? dbYuva.toJSON() : dbYuva;
+    json.labels = labels;
+    res.json(json);
+  } catch (e) {
+    console.error("yuva get by id failed", e);
+    res.status(500).json({ message: "Could not load data." });
   }
 });
 

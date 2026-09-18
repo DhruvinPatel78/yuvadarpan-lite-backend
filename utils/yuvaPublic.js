@@ -22,6 +22,7 @@ const resolveYuvaLabels = async (yuva) => {
   const [
     lastName,
     native,
+    mamaNative,
     country,
     state,
     region,
@@ -31,6 +32,7 @@ const resolveYuvaLabels = async (yuva) => {
   ] = await Promise.all([
     nameOf(Surname, yuva.lastName),
     nameOf(Native, yuva.native),
+    nameOf(Native, yuva.mamaInfo?.native),
     nameOf(Country, yuva.country),
     nameOf(State, yuva.state),
     nameOf(Region, yuva.region),
@@ -41,6 +43,7 @@ const resolveYuvaLabels = async (yuva) => {
   return {
     lastName,
     native,
+    mamaNative,
     country,
     state,
     region,
@@ -75,6 +78,7 @@ const PUBLIC_YUVA_KEYS = [
   "district",
   "localSamaj",
   "native",
+  "mamaInfo",
   "martialStatus",
 ];
 
@@ -93,6 +97,7 @@ const MEMBER_YUVA_KEYS = [
   "district",
   "localSamaj",
   "native",
+  "mamaInfo",
   "firm",
   "martialStatus",
   "bloodGroup",
@@ -135,6 +140,7 @@ const getPublicYuvaById = async (id) => {
 module.exports = {
   getPublicYuvaById,
   pickYuvaFields,
+  resolveYuvaLabels,
   MEMBER_YUVA_KEYS,
   MEMBER_YUVA_SELECT,
 };

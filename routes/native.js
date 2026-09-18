@@ -5,6 +5,7 @@ const { rejectLocationMasterWrite } = require("../utils/managerScope");
 const { attachLinkedRoute } = require("../utils/linkedRecords");
 const { verifyToken, errorCheck, requireAuth } = require("../utils/auth");
 const { escapeRegex } = require("../utils/escapeRegex");
+const { findByAnyId } = require("../utils/childCount");
 
 router.use(verifyToken());
 router.use(requireAuth);
@@ -62,11 +63,7 @@ router.delete("/delete", async (req, res) => {
 
 // Get country info by country id
 router.get("/getInfo/:id", async (req, res) => {
-  const { id } = req.params;
-  const Natives = await Native.find({
-    id: { $eq: id },
-    active: { $eq: true },
-  });
+  const Natives = await findByAnyId(Native, req.params.id);
   res.status(200).json(Natives);
 });
 
