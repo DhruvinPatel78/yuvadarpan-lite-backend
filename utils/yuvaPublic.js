@@ -76,6 +76,7 @@ const getPublicYuvaById = async (id) => {
       ? rawOther.toObject()
       : rawOther || json.other || {};
   json.labels = await resolveYuvaLabels(yuva);
+  delete json.email;
   return json;
 };
 

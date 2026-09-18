@@ -28,6 +28,7 @@ const {
   constrainYuvaLocationForManager,
 } = require("../utils/managerScope");
 const { attachLinkedRoute } = require("../utils/linkedRecords");
+const { recordActivity, recordActivityMany } = require("../utils/activityLog");
 
 const verifyToken = (req, res, next) => {
   const authHeader = req.headers.authorization;
@@ -217,7 +218,6 @@ const buildYuvaListFilter = (query = {}) => {
     containsClause("fatherName", query.fatherName),
     containsClause("grandFatherName", query.grandFatherName),
     containsClause("firm", query.firmName || query.firm),
-    containsClause("email", query.email),
   ]
     .filter(Boolean)
     .forEach((clause) => clauses.push(clause));
@@ -250,7 +250,6 @@ const buildYuvaListFilter = (query = {}) => {
       { motherName: rx },
       { familyId: rx },
       { firm: rx },
-      { email: rx },
       { gender: rx },
     ];
     const searchPhone = phoneMatch(search);
@@ -441,8 +440,9 @@ router.post("/addYuvaList", async (req, res) => {
       if (!constrained.ok) {
         return res.status(constrained.status).json({ message: constrained.message });
       }
+      const { email, ...record } = constrained.data || {};
       docs.push({
-        ...constrained.data,
+        ...record,
         id: uuidv4().replace(/-/g, ""),
         active: true,
         createdAt: new Date(),
@@ -453,9 +453,17 @@ router.post("/addYuvaList", async (req, res) => {
     }
     if (isBulk) {
       const created = await Yuvalist.insertMany(docs);
+      await recordActivityMany(req, "create", "yuva", created);
       return res.status(200).json({ data: created, count: created.length });
     }
     const created = await Yuvalist.create(docs[0]);
+    await recordActivity({
+      req,
+      action: "create",
+      entityType: "yuva",
+      entity: created,
+      next: created,
+    });
     res.send(created);
   } catch (e) {
     console.error("add yuva failed", e);
@@ -463,13 +471,16 @@ router.post("/addYuvaList", async (req, res) => {
   }
 });
 
-const deleteYuvaRecords = async (filter) => {
+const deleteYuvaRecords = async (filter, req) => {
   const docs = await Yuvalist.find(filter).lean();
   await Yuvalist.deleteMany(filter);
   try {
     await deleteYuvaImages(docs);
   } catch (e) {
     console.error("Failed to delete yuva images from S3", e);
+  }
+  if (req) {
+    await recordActivityMany(req, "delete", "yuva", docs);
   }
 };
 
@@ -478,7 +489,7 @@ router.delete("/delete", async (req, res) => {
     const ids = req.body?.ids || [];
     const scope = await getYuvaWriteScopeFilter(req.user.role, req.user.id);
     const filter = mergeYuvaWriteFilter(idsFilter(ids), scope);
-    await deleteYuvaRecords(filter);
+    await deleteYuvaRecords(filter, req);
     res.status(200).json({ message: "Delete Successfully" });
   }
 });
@@ -491,7 +502,7 @@ router.delete("/:id", async (req, res) => {
     if (!allowed) {
       return res.status(403).json({ message: "You cannot do this." });
     }
-    await deleteYuvaRecords(filter);
+    await deleteYuvaRecords(filter, req);
     res.status(200).json({ message: "Delete Successfully" });
   }
 });
@@ -511,12 +522,24 @@ router.patch("/update/:id", async (req, res) => {
     if (!constrained.ok) {
       return res.status(constrained.status).json({ message: constrained.message });
     }
+    const previous = allowed.toObject ? allowed.toObject() : { ...allowed };
+    const payload = sanitizeUpdatePayload(constrained.data);
+    delete payload.email;
+    delete previous.email;
     await Yuvalist.updateOne(filter, {
       $set: {
-        ...sanitizeUpdatePayload(constrained.data),
+        ...payload,
         updatedAt: new Date(),
         updatedBy: req?.user?.id,
       },
+      $unset: { email: "" },
+    });
+    await recordActivity({
+      req,
+      action: "update",
+      entityType: "yuva",
+      previous,
+      next: { ...previous, ...payload },
     });
     res.status(200).json({ message: "Updated Successfully" });
   }

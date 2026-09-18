@@ -92,7 +92,6 @@ const yuvaListSchema = new mongoose.Schema({
   activity: String,
   martialStatus: String,
   grandFatherName: String,
-  email: String,
   YSKno: String,
   abroadStudy: String,
   weight: {
@@ -121,6 +120,7 @@ const yuvaListSchema = new mongoose.Schema({
         transform: (doc, ret) => {
             ret.id = ret._id;
             delete ret._id;
+            delete ret.email;
             return ret;
         }
     }

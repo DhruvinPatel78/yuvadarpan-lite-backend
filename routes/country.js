@@ -6,6 +6,7 @@ const jwt = require("jsonwebtoken");
 const { attachChildCounts, findByAnyId, idOrObjectIdFilter, idsFilter, sanitizeUpdatePayload } = require("../utils/childCount");
 const { rejectLocationMasterWrite } = require("../utils/managerScope");
 const { attachLinkedRoute } = require("../utils/linkedRecords");
+const { recordActivity, recordActivityMany } = require("../utils/activityLog");
 
 const privateRoutes = ["POST", "DELETE", "PATCH"];
 
@@ -97,6 +98,13 @@ router.post("/add", async (req, res) => {
       createdBy: req.user.id,
       updatedBy: null,
     });
+    await recordActivity({
+      req,
+      action: "create",
+      entityType: "country",
+      entity: dbCountry,
+      next: dbCountry,
+    });
     res.status(200).json(dbCountry);
   }
 });
@@ -105,7 +113,10 @@ router.post("/add", async (req, res) => {
 router.delete("/delete", async (req, res) => {
   if (!errorCheck(req, res) && !rejectLocationMasterWrite(req, res)) {
     const data = req.body;
-    await Country.deleteMany(idsFilter(data?.countries));
+    const filter = idsFilter(data?.countries);
+    const docs = await Country.find(filter).lean();
+    await Country.deleteMany(filter);
+    await recordActivityMany(req, "delete", "country", docs);
     res.status(200).json({ message: "Delete Successfully" });
   }
 });
@@ -120,10 +131,21 @@ router.patch("/update/:id", async (req, res) => {
   if (!errorCheck(req, res) && !rejectLocationMasterWrite(req, res)) {
     const { id } = req.params;
     const payload = { ...req.body };
+    const filter = idOrObjectIdFilter(id);
+    const previous = await Country.findOne(filter).lean();
     await Country.updateOne(
-      idOrObjectIdFilter(id),
+      filter,
       { ...sanitizeUpdatePayload(payload), updatedAt: new Date(), updatedBy: req?.user.id },
     );
+    if (previous) {
+      await recordActivity({
+        req,
+        action: "update",
+        entityType: "country",
+        previous,
+        next: { ...previous, ...sanitizeUpdatePayload(payload) },
+      });
+    }
     res.status(200).json({ message: "Updated Successfully" });
   }
 });

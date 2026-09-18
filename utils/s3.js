@@ -1,11 +1,38 @@
 const AWS = require("aws-sdk");
 const Yuvalist = require("../models/yuvalist");
 
-const BUCKET = "yuvadarpanbucket";
+const bucketFromBaseUrl = (url) => {
+  try {
+    const host = new URL(url).hostname;
+    const match = host.match(/^(.+)\.s3[.-]/i);
+    return match?.[1] || "";
+  } catch (e) {
+    return "";
+  }
+};
+
+const BUCKET =
+  process.env.AWS_S3_BUCKET ||
+  bucketFromBaseUrl(process.env.AWS_BASE_URL) ||
+  "yuvadarpanbucket";
+
+const regionFromBaseUrl = (url) => {
+  try {
+    const host = new URL(url).hostname;
+    const match = host.match(/s3[.-]([a-z0-9-]+)\.amazonaws\.com$/i);
+    return match?.[1] || "";
+  } catch (e) {
+    return "";
+  }
+};
 
 const s3 = new AWS.S3({
   accessKeyId: process.env.ACCESS_KEY_ID,
   secretAccessKey: process.env.SECRET_ACCESS_KEY,
+  region:
+    process.env.AWS_REGION ||
+    regionFromBaseUrl(process.env.AWS_BASE_URL) ||
+    "eu-north-1",
 });
 
 const getS3KeyFromYuva = (doc) => {
