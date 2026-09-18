@@ -1,42 +1,10 @@
 const express = require("express");
-const jwt = require("jsonwebtoken");
 const router = express.Router();
 const Shortlist = require("../models/shortlist");
 const Yuvalist = require("../models/yuvalist");
 const { idOrObjectIdFilter } = require("../utils/childCount");
-
-const verifyToken = (req, res, next) => {
-  const authHeader = req.headers.authorization;
-  if (!authHeader) {
-    req.error = { message: "no-token" };
-    return next();
-  }
-  try {
-    const decoded = jwt.verify(
-      authHeader.replace("Bearer ", ""),
-      process.env.JWT_SECRET,
-    );
-    req.user = {
-      email: decoded.email,
-      role: decoded.role,
-      id: decoded.id,
-    };
-  } catch (error) {
-    req.error = { message: error.name };
-  }
-  next();
-};
-
-const errorCheck = (req, res) => {
-  if (req.hasOwnProperty("error")) {
-    const { message } = req.error;
-    res.status(401).send({
-      message: message === "no-token" ? "Please sign in." : "Session expired. Sign in again.",
-    });
-    return true;
-  }
-  return false;
-};
+const { verifyToken, errorCheck } = require("../utils/auth");
+const { MEMBER_YUVA_SELECT } = require("../utils/yuvaPublic");
 
 const isRegularUser = (role) => String(role || "").toUpperCase() === "USER";
 
@@ -54,7 +22,7 @@ const requireRegularUser = (req, res) => {
 const yuvaKeys = (yuva) =>
   [...new Set([yuva?.id, yuva?._id && String(yuva._id)].filter(Boolean).map(String))];
 
-router.use(verifyToken);
+router.use(verifyToken());
 
 router.get("/ids", async (req, res) => {
   if (requireRegularUser(req, res)) {
@@ -92,7 +60,7 @@ router.get("/", async (req, res) => {
           }
           return parts;
         }),
-      }).exec()
+      }).select(MEMBER_YUVA_SELECT).exec()
     : [];
   const yuvaMap = new Map();
   yuvas.forEach((yuva) => {

@@ -3,7 +3,6 @@ const router = express.Router();
 const Samaj = require("../models/samaj");
 const City = require("../models/city");
 const Region = require("../models/region");
-const jwt = require("jsonwebtoken");
 const { findChildrenByParent, findByAnyId, idOrObjectIdFilter, idsFilter, sanitizeUpdatePayload } = require("../utils/childCount");
 const {
   rejectSamajManagerWrite,
@@ -31,52 +30,11 @@ const {
   isOwnCountryQuery,
 } = require("../utils/managerScope");
 const { attachLinkedRoute } = require("../utils/linkedRecords");
+const { recordActivity, recordActivityMany } = require("../utils/activityLog");
+const { verifyToken, errorCheck, WRITE_METHODS } = require("../utils/auth");
+const { escapeRegex } = require("../utils/escapeRegex");
 
-const privateRoutes = ["POST", "DELETE", "PATCH"];
-
-const verifyToken = (req, res, next) => {
-  if (privateRoutes.includes(req.method)) {
-    const authHeader = req.headers.authorization;
-    if (authHeader) {
-      jwt.verify(
-        authHeader.replace("Bearer ", ""),
-        process.env.JWT_SECRET,
-        (error, res) => {
-          if (res) {
-            req.user = {
-              email: res.email,
-              role: res.role,
-              id: res.id,
-            };
-          } else {
-            req.error = {
-              message: error.name,
-            };
-          }
-        }
-      );
-    } else {
-      req.error = {
-        message: "no-token",
-      };
-    }
-  }
-  next();
-};
-
-const errorCheck = (req, res) => {
-  if (req.hasOwnProperty("error")) {
-    const { message } = req.error;
-    res.status(401).send({
-      message: message === "no-token" ? "Please sign in." : "Session expired. Sign in again.",
-    });
-    return true;
-  } else {
-    return false;
-  }
-};
-
-router.use(verifyToken);
+router.use(verifyToken({ methods: WRITE_METHODS }));
 attachLinkedRoute(router, "samaj", errorCheck);
 
 // Get all samaj
@@ -124,7 +82,7 @@ router.get("/list", async (req, res) => {
       : {};
   const Name = name
     ? {
-        name: { $regex: new RegExp(name, "i") },
+        name: { $regex: new RegExp(escapeRegex(name), "i") },
       }
     : {};
   const filter = {
@@ -278,6 +236,13 @@ router.post("/add", async (req, res) => {
       createdBy: req.user.id,
       updatedBy: null,
     });
+    await recordActivity({
+      req,
+      action: "create",
+      entityType: "samaj",
+      entity: dbSamaj,
+      next: dbSamaj,
+    });
     res.status(200).send(dbSamaj);
   }
 });
@@ -316,7 +281,9 @@ router.delete("/delete", async (req, res) => {
       );
       query.country_id = { $in: countryKeys.length ? countryKeys : ["__none__"] };
     }
+    const docs = await Samaj.find(query).lean();
     await Samaj.deleteMany(query);
+    await recordActivityMany(req, "delete", "samaj", docs);
     res.status(200).json({ message: "Delete Successfully" });
   }
 });
@@ -422,10 +389,20 @@ router.patch("/update/:id", async (req, res) => {
         return res.status(403).json({ message: "You cannot do this." });
       }
     }
+    const previous = await Samaj.findOne(filter).lean();
     await Samaj.updateOne(
       filter,
       { ...sanitizeUpdatePayload(payload), updatedAt: new Date(), updatedBy: req?.user.id }
     );
+    if (previous) {
+      await recordActivity({
+        req,
+        action: "update",
+        entityType: "samaj",
+        previous,
+        next: { ...previous, ...sanitizeUpdatePayload(payload) },
+      });
+    }
     res.status(200).json({ message: "Updated Successfully" });
   }
 });

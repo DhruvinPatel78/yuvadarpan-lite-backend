@@ -1,53 +1,14 @@
 const express = require("express");
 const router = express.Router();
 const Gotra = require("../models/gotra");
-const jwt = require("jsonwebtoken");
 const { idsFilter, idOrObjectIdFilter, sanitizeUpdatePayload } = require("../utils/childCount");
 const { rejectLocationMasterWrite } = require("../utils/managerScope");
 const { attachLinkedRoute } = require("../utils/linkedRecords");
+const { verifyToken, errorCheck, requireAuth } = require("../utils/auth");
+const { escapeRegex } = require("../utils/escapeRegex");
 
-const privateRoutes = ["POST", "DELETE", "PATCH"];
-
-const verifyToken = (req, res, next) => {
-  if (privateRoutes.includes(req.method)) {
-    const authHeader = req.headers.authorization;
-    if (authHeader) {
-      try {
-        const decoded = jwt.verify(
-          authHeader.replace("Bearer ", ""),
-          process.env.JWT_SECRET,
-        );
-        req.user = {
-          email: decoded.email,
-          role: decoded.role,
-          id: decoded.id,
-        };
-      } catch (error) {
-        req.error = {
-          message: error.name,
-        };
-      }
-    } else {
-      req.error = {
-        message: "no-token",
-      };
-    }
-  }
-  next();
-};
-
-const errorCheck = (req, res) => {
-  if (req.hasOwnProperty("error")) {
-    const { message } = req.error;
-    res.status(401).send({
-      message: message === "no-token" ? "Please sign in." : "Session expired. Sign in again.",
-    });
-    return true;
-  }
-  return false;
-};
-
-router.use(verifyToken);
+router.use(verifyToken());
+router.use(requireAuth);
 attachLinkedRoute(router, "gotra", errorCheck);
 
 router.get("/list", async (req, res) => {
@@ -57,7 +18,7 @@ router.get("/list", async (req, res) => {
   const { name } = req.query;
   const Name = name
     ? {
-        name: { $regex: new RegExp(name, "i") },
+        name: { $regex: new RegExp(escapeRegex(name), "i") },
       }
     : {};
   const records = await Gotra.find({ ...Name })
@@ -85,7 +46,7 @@ router.post("/add", async (req, res) => {
       return;
     }
     const existing = await Gotra.findOne({
-      name: { $regex: new RegExp(`^${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i") },
+      name: { $regex: new RegExp(`^${escapeRegex(name)}$`, "i") },
     });
     if (existing) {
       res.status(200).send(existing);

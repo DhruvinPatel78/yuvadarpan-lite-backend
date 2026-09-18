@@ -2,56 +2,15 @@ const express = require("express");
 const router = express.Router();
 const Country = require("../models/country");
 const State = require("../models/state");
-const jwt = require("jsonwebtoken");
 const { attachChildCounts, findByAnyId, idOrObjectIdFilter, idsFilter, sanitizeUpdatePayload } = require("../utils/childCount");
 const { rejectLocationMasterWrite } = require("../utils/managerScope");
 const { attachLinkedRoute } = require("../utils/linkedRecords");
+const { recordActivity, recordActivityMany } = require("../utils/activityLog");
+const { verifyToken, errorCheck, requireAuth } = require("../utils/auth");
+const { escapeRegex } = require("../utils/escapeRegex");
 
-const privateRoutes = ["POST", "DELETE", "PATCH"];
-
-const verifyToken = (req, res, next) => {
-  if (privateRoutes.includes(req.method)) {
-    const authHeader = req.headers.authorization;
-    if (authHeader) {
-      jwt.verify(
-        authHeader.replace("Bearer ", ""),
-        process.env.JWT_SECRET,
-        (error, res) => {
-          if (res) {
-            req.user = {
-              email: res.email,
-              role: res.role,
-              id: res.id,
-            };
-          } else {
-            req.error = {
-              message: error.name,
-            };
-          }
-        },
-      );
-    } else {
-      req.error = {
-        message: "no-token",
-      };
-    }
-  }
-  next();
-};
-
-const errorCheck = (req, res) => {
-  if (req.hasOwnProperty("error")) {
-    const { message } = req.error;
-    res.status(401).send({
-      message: message === "no-token" ? "Please sign in." : "Session expired. Sign in again.",
-    });
-    return true;
-  } else {
-    return false;
-  }
-};
-
-router.use(verifyToken);
+router.use(verifyToken());
+router.use(requireAuth);
 attachLinkedRoute(router, "country", errorCheck);
 
 // Get all countries
@@ -61,7 +20,7 @@ router.get("/list", async (req, res) => {
   const { name } = req.query;
   const Name = name
     ? {
-        name: { $regex: new RegExp(name, "i") },
+        name: { $regex: new RegExp(escapeRegex(name), "i") },
       }
     : {};
   const offset = (page - 1) * limit;
@@ -97,6 +56,13 @@ router.post("/add", async (req, res) => {
       createdBy: req.user.id,
       updatedBy: null,
     });
+    await recordActivity({
+      req,
+      action: "create",
+      entityType: "country",
+      entity: dbCountry,
+      next: dbCountry,
+    });
     res.status(200).json(dbCountry);
   }
 });
@@ -105,7 +71,10 @@ router.post("/add", async (req, res) => {
 router.delete("/delete", async (req, res) => {
   if (!errorCheck(req, res) && !rejectLocationMasterWrite(req, res)) {
     const data = req.body;
-    await Country.deleteMany(idsFilter(data?.countries));
+    const filter = idsFilter(data?.countries);
+    const docs = await Country.find(filter).lean();
+    await Country.deleteMany(filter);
+    await recordActivityMany(req, "delete", "country", docs);
     res.status(200).json({ message: "Delete Successfully" });
   }
 });
@@ -120,10 +89,21 @@ router.patch("/update/:id", async (req, res) => {
   if (!errorCheck(req, res) && !rejectLocationMasterWrite(req, res)) {
     const { id } = req.params;
     const payload = { ...req.body };
+    const filter = idOrObjectIdFilter(id);
+    const previous = await Country.findOne(filter).lean();
     await Country.updateOne(
-      idOrObjectIdFilter(id),
+      filter,
       { ...sanitizeUpdatePayload(payload), updatedAt: new Date(), updatedBy: req?.user.id },
     );
+    if (previous) {
+      await recordActivity({
+        req,
+        action: "update",
+        entityType: "country",
+        previous,
+        next: { ...previous, ...sanitizeUpdatePayload(payload) },
+      });
+    }
     res.status(200).json({ message: "Updated Successfully" });
   }
 });

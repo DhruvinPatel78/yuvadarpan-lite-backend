@@ -63,20 +63,78 @@ const sanitizeYuvaId = (value) => {
   return raw.split(/[\s/?&#]/)[0];
 };
 
+const PUBLIC_YUVA_KEYS = [
+  "id",
+  "firstName",
+  "lastName",
+  "gender",
+  "dob",
+  "city",
+  "state",
+  "region",
+  "district",
+  "localSamaj",
+  "native",
+  "martialStatus",
+];
+
+const MEMBER_YUVA_KEYS = [
+  "id",
+  "firstName",
+  "fatherName",
+  "grandFatherName",
+  "motherName",
+  "lastName",
+  "dob",
+  "gender",
+  "city",
+  "state",
+  "region",
+  "district",
+  "localSamaj",
+  "native",
+  "firm",
+  "martialStatus",
+  "bloodGroup",
+  "education",
+  "height",
+  "weight",
+  "profile",
+  "active",
+];
+
+const MEMBER_YUVA_SELECT = MEMBER_YUVA_KEYS.join(" ");
+
+const pickYuvaFields = (yuva, keys) => {
+  if (!yuva) {
+    return null;
+  }
+  const json = typeof yuva.toJSON === "function" ? yuva.toJSON() : { ...yuva };
+  const picked = {};
+  keys.forEach((key) => {
+    if (json[key] !== undefined) {
+      picked[key] = json[key];
+    }
+  });
+  picked.id = json.id || json._id;
+  return picked;
+};
+
 const getPublicYuvaById = async (id) => {
   const rows = await findByAnyId(Yuvalist, sanitizeYuvaId(id));
   const yuva = Array.isArray(rows) ? rows[0] : rows;
   if (!yuva) {
     return null;
   }
-  const json = typeof yuva.toJSON === "function" ? yuva.toJSON() : { ...yuva };
-  const rawOther = typeof yuva.get === "function" ? yuva.get("other") : yuva.other;
-  json.other =
-    rawOther && typeof rawOther.toObject === "function"
-      ? rawOther.toObject()
-      : rawOther || json.other || {};
+  const json = pickYuvaFields(yuva, PUBLIC_YUVA_KEYS);
   json.labels = await resolveYuvaLabels(yuva);
+  delete json.email;
   return json;
 };
 
-module.exports = { getPublicYuvaById };
+module.exports = {
+  getPublicYuvaById,
+  pickYuvaFields,
+  MEMBER_YUVA_KEYS,
+  MEMBER_YUVA_SELECT,
+};

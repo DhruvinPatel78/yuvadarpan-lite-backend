@@ -3,7 +3,6 @@ const router = express.Router();
 const City = require("../models/city");
 const District = require("../models/district");
 const Samaj = require("../models/samaj");
-const jwt = require("jsonwebtoken");
 const {
   attachChildCounts,
   findChildrenByParent,
@@ -35,52 +34,12 @@ const {
   isOwnCountryQuery,
 } = require("../utils/managerScope");
 const { attachLinkedRoute } = require("../utils/linkedRecords");
+const { recordActivity, recordActivityMany } = require("../utils/activityLog");
+const { verifyToken, errorCheck, requireAuth } = require("../utils/auth");
+const { escapeRegex } = require("../utils/escapeRegex");
 
-const privateRoutes = ["POST", "DELETE", "PATCH"];
-
-const verifyToken = (req, res, next) => {
-  if (privateRoutes.includes(req.method)) {
-    const authHeader = req.headers.authorization;
-    if (authHeader) {
-      jwt.verify(
-        authHeader.replace("Bearer ", ""),
-        process.env.JWT_SECRET,
-        (error, res) => {
-          if (res) {
-            req.user = {
-              email: res.email,
-              role: res.role,
-              id: res.id,
-            };
-          } else {
-            req.error = {
-              message: error.name,
-            };
-          }
-        },
-      );
-    } else {
-      req.error = {
-        message: "no-token",
-      };
-    }
-  }
-  next();
-};
-
-const errorCheck = (req, res) => {
-  if (req.hasOwnProperty("error")) {
-    const { message } = req.error;
-    res.status(401).send({
-      message: message === "no-token" ? "Please sign in." : "Session expired. Sign in again.",
-    });
-    return true;
-  } else {
-    return false;
-  }
-};
-
-router.use(verifyToken);
+router.use(verifyToken());
+router.use(requireAuth);
 attachLinkedRoute(router, "city", errorCheck);
 
 // Get all cities
@@ -121,7 +80,7 @@ router.get("/list", async (req, res) => {
       : {};
   const Name = name
     ? {
-        name: { $regex: new RegExp(name, "i") },
+        name: { $regex: new RegExp(escapeRegex(name), "i") },
       }
     : {};
   const filter = {
@@ -262,6 +221,13 @@ router.post("/add", async (req, res) => {
     createdBy: req.user.id,
     updatedBy: null,
   });
+  await recordActivity({
+    req,
+    action: "create",
+    entityType: "city",
+    entity: dbCity,
+    next: dbCity,
+  });
   res.status(200).send(dbCity);
 });
 
@@ -299,7 +265,9 @@ router.delete("/delete", async (req, res) => {
     );
     query.country_id = { $in: countryKeys.length ? countryKeys : ["__none__"] };
   }
+  const docs = await City.find(query).lean();
   await City.deleteMany(query);
+  await recordActivityMany(req, "delete", "city", docs);
   res.status(200).json({ message: "Delete Successfully" });
 });
 
@@ -394,10 +362,20 @@ router.patch("/update/:id", async (req, res) => {
       return res.status(403).json({ message: "You cannot do this." });
     }
   }
+  const previous = await City.findOne(filter).lean();
   await City.updateOne(
     filter,
     { ...sanitizeUpdatePayload(payload), updatedAt: new Date(), updatedBy: req?.user.id }
   );
+  if (previous) {
+    await recordActivity({
+      req,
+      action: "update",
+      entityType: "city",
+      previous,
+      next: { ...previous, ...sanitizeUpdatePayload(payload) },
+    });
+  }
   res.status(200).json({ message: "Updated Successfully" });
 });
 
