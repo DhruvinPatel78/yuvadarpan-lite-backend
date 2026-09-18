@@ -31,6 +31,7 @@ const {
   isOwnCountryQuery,
 } = require("../utils/managerScope");
 const { attachLinkedRoute } = require("../utils/linkedRecords");
+const { recordActivity, recordActivityMany } = require("../utils/activityLog");
 const { verifyToken, errorCheck, requireAuth } = require("../utils/auth");
 const { escapeRegex } = require("../utils/escapeRegex");
 
@@ -198,6 +199,13 @@ router.post("/add", async (req, res) => {
     createdBy: req.user.id,
     updatedBy: null,
   });
+  await recordActivity({
+    req,
+    action: "create",
+    entityType: "district",
+    entity: dbDistrict,
+    next: dbDistrict,
+  });
   res.status(200).json(dbDistrict);
 });
 
@@ -228,7 +236,9 @@ router.delete("/delete", async (req, res) => {
     );
     query.country_id = { $in: countryKeys.length ? countryKeys : ["__none__"] };
   }
+  const docs = await District.find(query).lean();
   await District.deleteMany(query);
+  await recordActivityMany(req, "delete", "district", docs);
   res.status(200).json({ message: "Delete Successfully" });
 });
 
@@ -302,10 +312,20 @@ router.patch("/update/:id", async (req, res) => {
       return res.status(403).json({ message: "You cannot do this." });
     }
   }
+  const previous = await District.findOne(filter).lean();
   await District.updateOne(
     filter,
     { ...sanitizeUpdatePayload(payload), updatedAt: new Date(), updatedBy: req?.user.id }
   );
+  if (previous) {
+    await recordActivity({
+      req,
+      action: "update",
+      entityType: "district",
+      previous,
+      next: { ...previous, ...sanitizeUpdatePayload(payload) },
+    });
+  }
   res.status(200).json({ message: "Updated Successfully" });
 });
 

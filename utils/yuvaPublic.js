@@ -128,6 +128,7 @@ const getPublicYuvaById = async (id) => {
   }
   const json = pickYuvaFields(yuva, PUBLIC_YUVA_KEYS);
   json.labels = await resolveYuvaLabels(yuva);
+  delete json.email;
   return json;
 };
 

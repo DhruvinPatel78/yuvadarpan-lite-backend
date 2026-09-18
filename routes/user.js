@@ -38,6 +38,11 @@ const {
   isLocationMasterReadOnly,
 } = require("../utils/managerScope");
 const { attachLinkedRoute } = require("../utils/linkedRecords");
+const {
+  recordActivity,
+  recordActivityMany,
+  inferUserAction,
+} = require("../utils/activityLog");
 
 const createUniqueOtp = async () => {
   for (let attempt = 0; attempt < 8; attempt += 1) {
@@ -103,6 +108,26 @@ const canManageUsers = (role) =>
 
 router.use(verifyToken());
 attachLinkedRoute(router, "user", errorCheck);
+
+router.get("/getInfo/:id", async (req, res) => {
+  if (errorCheck(req, res)) {
+    return;
+  }
+  if (String(req.user?.role || "").toUpperCase() === "USER") {
+    return res.status(403).json({ message: appMessages.notAllowed });
+  }
+  const user =
+    (await User.findById(req.params.id).lean()) ||
+    (await User.findOne(idOrObjectIdFilter(String(req.params.id))).lean());
+  if (!user) {
+    return res.status(404).json({ message: appMessages.userNotFound });
+  }
+  delete user.password;
+  delete user.fcmToken;
+  user.id = user._id;
+  delete user._id;
+  res.status(200).json(user);
+});
 
 router.get("/me", async (req, res) => {
   if (!errorCheck(req, res)) {
@@ -589,6 +614,13 @@ router.post("/add", async (req, res) => {
       dbUser,
       isAdmin ? "AccountVerifySuccess" : "RegistrationSuccess",
     );
+    await recordActivity({
+      req,
+      action: "create",
+      entityType: "user",
+      entity: dbUser,
+      next: dbUser,
+    });
     res.send(dbUser);
   } catch (e) {
     res.status(400).json({ message: e.message || appMessages.createFailed });
@@ -925,6 +957,38 @@ router.patch("/update/:id", async (req, res) => {
       );
     }
 
+    const nextUser = { ...currentUser, ...payload };
+    await recordActivity({
+      req,
+      action: inferUserAction(currentUser, payload),
+      entityType: "user",
+      previous: currentUser,
+      next: nextUser,
+      entity: nextUser,
+      extraChanges: [
+        ...("allowed" in statusPayload
+          ? [
+              {
+                field: "allowed",
+                label: "Allowed",
+                from: currentUser.allowed ? "Yes" : "No",
+                to: statusPayload.allowed ? "Yes" : "No",
+              },
+            ]
+          : []),
+        ...("active" in statusPayload
+          ? [
+              {
+                field: "active",
+                label: "Active",
+                from: currentUser.active ? "Yes" : "No",
+                to: statusPayload.active ? "Yes" : "No",
+              },
+            ]
+          : []),
+      ],
+    });
+
     res.status(200).json({ message: appMessages.updated });
   }
 });
@@ -960,7 +1024,9 @@ router.delete("/delete", async (req, res) => {
       const manager = await findAccountByTokenId(req.user.id);
       Object.assign(query, await usersInManagerCountryQuery(manager));
     }
+    const usersToDelete = await User.find(query).lean();
     await User.deleteMany(query);
+    await recordActivityMany(req, "delete", "user", usersToDelete);
     res.status(200).json({ message: appMessages.deleted });
   }
 });
@@ -1139,6 +1205,19 @@ router.patch("/approveRejectMany", async (req, res) => {
           user,
           isAccepting ? "AccountVerifySuccess" : "AccountVerifyFail",
         ),
+      ),
+    );
+
+    await Promise.all(
+      usersToUpdate.map((user) =>
+        recordActivity({
+          req,
+          action: isAccepting ? "approve" : "reject",
+          entityType: "user",
+          previous: user,
+          next: { ...user, allowed: isAccepting, active: isAccepting },
+          entity: { ...user, allowed: isAccepting, active: isAccepting },
+        }),
       ),
     );
 

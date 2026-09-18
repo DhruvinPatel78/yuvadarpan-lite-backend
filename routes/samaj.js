@@ -30,6 +30,7 @@ const {
   isOwnCountryQuery,
 } = require("../utils/managerScope");
 const { attachLinkedRoute } = require("../utils/linkedRecords");
+const { recordActivity, recordActivityMany } = require("../utils/activityLog");
 const { verifyToken, errorCheck, WRITE_METHODS } = require("../utils/auth");
 const { escapeRegex } = require("../utils/escapeRegex");
 
@@ -235,6 +236,13 @@ router.post("/add", async (req, res) => {
       createdBy: req.user.id,
       updatedBy: null,
     });
+    await recordActivity({
+      req,
+      action: "create",
+      entityType: "samaj",
+      entity: dbSamaj,
+      next: dbSamaj,
+    });
     res.status(200).send(dbSamaj);
   }
 });
@@ -273,7 +281,9 @@ router.delete("/delete", async (req, res) => {
       );
       query.country_id = { $in: countryKeys.length ? countryKeys : ["__none__"] };
     }
+    const docs = await Samaj.find(query).lean();
     await Samaj.deleteMany(query);
+    await recordActivityMany(req, "delete", "samaj", docs);
     res.status(200).json({ message: "Delete Successfully" });
   }
 });
@@ -379,10 +389,20 @@ router.patch("/update/:id", async (req, res) => {
         return res.status(403).json({ message: "You cannot do this." });
       }
     }
+    const previous = await Samaj.findOne(filter).lean();
     await Samaj.updateOne(
       filter,
       { ...sanitizeUpdatePayload(payload), updatedAt: new Date(), updatedBy: req?.user.id }
     );
+    if (previous) {
+      await recordActivity({
+        req,
+        action: "update",
+        entityType: "samaj",
+        previous,
+        next: { ...previous, ...sanitizeUpdatePayload(payload) },
+      });
+    }
     res.status(200).json({ message: "Updated Successfully" });
   }
 });
