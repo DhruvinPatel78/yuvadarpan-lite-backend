@@ -137,6 +137,21 @@ const containsClause = (field, value) => {
   };
 };
 
+const exactAnyClause = (field, values) => {
+  const list = toQueryArray(values);
+  if (!list.length) {
+    return null;
+  }
+  return {
+    $or: list.map((item) => ({
+      [field]: {
+        $regex: `^${escapeRegex(String(item).trim())}$`,
+        $options: "i",
+      },
+    })),
+  };
+};
+
 const buildYuvaListFilter = (query = {}) => {
   const clauses = [];
   const lastName = toQueryArray(query.lastName);
@@ -167,15 +182,26 @@ const buildYuvaListFilter = (query = {}) => {
   if (samaj.length) {
     clauses.push({ localSamaj: { $in: samaj } });
   }
-  const gender = toQueryArray(query.gender);
-  if (gender.length) {
+  [
+    exactAnyClause("gender", query.gender),
+    exactAnyClause("bloodGroup", query.bloodGroup),
+    exactAnyClause(
+      "martialStatus",
+      query.martialStatus || query.maritalStatus
+    ),
+  ]
+    .filter(Boolean)
+    .forEach((clause) => clauses.push(clause));
+  const education = toQueryArray(query.education);
+  if (education.length) {
     clauses.push({
-      $or: gender.map((item) => ({
-        gender: {
+      $or: education.flatMap((item) => {
+        const rx = {
           $regex: `^${escapeRegex(String(item).trim())}$`,
           $options: "i",
-        },
-      })),
+        };
+        return [{ "education.education": rx }, { education: rx }];
+      }),
     });
   }
   const ageClause = dobRangeForAge(
