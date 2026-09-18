@@ -5,6 +5,7 @@ const District = require("../models/district");
 const City = require("../models/city");
 const Samaj = require("../models/samaj");
 const Surname = require("../models/surname");
+const Gotra = require("../models/gotra");
 const Native = require("../models/native");
 const Role = require("../models/role");
 const User = require("../models/user");
@@ -272,6 +273,17 @@ const getSurnameLinks = async (ids) => {
   return peopleGroups(users, yuvas);
 };
 
+const getGotraLinks = async (ids) => {
+  const gotraKeys = await collectKeys(Gotra, ids);
+  const gotras = await Gotra.find(idsFilter(gotraKeys)).select("id name").lean();
+  const matchKeys = uniqueKeys(
+    gotraKeys,
+    gotras.map((item) => item.name),
+  );
+  const surnames = await findByField(Surname, "gotra", matchKeys);
+  return [group("surnames", "Surname", surnames, toPlaceItems)];
+};
+
 const getNativeLinks = async (ids) => {
   const nativeKeys = await collectKeys(Native, ids);
   const yuvas = await findByAnyField(
@@ -319,6 +331,7 @@ const HANDLERS = {
   city: getCityLinks,
   samaj: getSamajLinks,
   surname: getSurnameLinks,
+  gotra: getGotraLinks,
   native: getNativeLinks,
   role: getRoleLinks,
   user: getUserLinks,
