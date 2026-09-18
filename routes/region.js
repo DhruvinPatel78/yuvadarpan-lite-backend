@@ -3,7 +3,6 @@ const router = express.Router();
 const Region = require("../models/region");
 const State = require("../models/state");
 const District = require("../models/district");
-const jwt = require("jsonwebtoken");
 const {
   attachChildCounts,
   findChildrenByParent,
@@ -30,52 +29,10 @@ const {
 } = require("../utils/managerScope");
 const { attachLinkedRoute } = require("../utils/linkedRecords");
 const { recordActivity, recordActivityMany } = require("../utils/activityLog");
+const { verifyToken, errorCheck, WRITE_METHODS } = require("../utils/auth");
+const { escapeRegex } = require("../utils/escapeRegex");
 
-const privateRoutes = ["POST", "DELETE", "PATCH"];
-
-const verifyToken = (req, res, next) => {
-  if (privateRoutes.includes(req.method)) {
-    const authHeader = req.headers.authorization;
-    if (authHeader) {
-      jwt.verify(
-        authHeader.replace("Bearer ", ""),
-        process.env.JWT_SECRET,
-        (error, res) => {
-          if (res) {
-            req.user = {
-              email: res.email,
-              role: res.role,
-              id: res.id,
-            };
-          } else {
-            req.error = {
-              message: error.name,
-            };
-          }
-        }
-      );
-    } else {
-      req.error = {
-        message: "no-token",
-      };
-    }
-  }
-  next();
-};
-
-const errorCheck = (req, res) => {
-  if (req.hasOwnProperty("error")) {
-    const { message } = req.error;
-    res.status(401).send({
-      message: message === "no-token" ? "Please sign in." : "Session expired. Sign in again.",
-    });
-    return true;
-  } else {
-    return false;
-  }
-};
-
-router.use(verifyToken);
+router.use(verifyToken({ methods: WRITE_METHODS }));
 attachLinkedRoute(router, "region", errorCheck);
 
 // Get all region
@@ -98,7 +55,7 @@ router.get("/list", async (req, res) => {
       : {};
   const Name = name
     ? {
-        name: { $regex: new RegExp(name, "i") },
+        name: { $regex: new RegExp(escapeRegex(name), "i") },
       }
     : {};
   const filter = {

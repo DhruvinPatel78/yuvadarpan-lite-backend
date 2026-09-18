@@ -54,7 +54,12 @@ const getTokenPayload = (req) => {
 const getRoleFromRequest = (req) => getTokenPayload(req)?.role || null;
 
 const rejectSamajManagerWrite = (req, res) => {
-  if (isSamajManager(getRoleFromRequest(req))) {
+  const role = getRoleFromRequest(req);
+  if (!isAdmin(role) && !isLocationMasterReadOnly(role)) {
+    res.status(403).json({ message: "You cannot do this." });
+    return true;
+  }
+  if (isSamajManager(role)) {
     res.status(403).json({ message: "You cannot do this." });
     return true;
   }
@@ -62,7 +67,16 @@ const rejectSamajManagerWrite = (req, res) => {
 };
 
 const rejectLocationMasterWrite = (req, res) => {
-  if (isLocationMasterReadOnly(getRoleFromRequest(req))) {
+  if (!isAdmin(getRoleFromRequest(req))) {
+    res.status(403).json({ message: "You cannot do this." });
+    return true;
+  }
+  return false;
+};
+
+const rejectUnlessStaff = (req, res) => {
+  const role = getRoleFromRequest(req);
+  if (!isAdmin(role) && !isLocationMasterReadOnly(role)) {
     res.status(403).json({ message: "You cannot do this." });
     return true;
   }
@@ -855,4 +869,5 @@ module.exports = {
   getRoleFromRequest,
   rejectSamajManagerWrite,
   rejectLocationMasterWrite,
+  rejectUnlessStaff,
 };

@@ -1,12 +1,13 @@
 const express = require("express");
-const jwt = require("jsonwebtoken");
 const router = express.Router();
 const Yuvalist = require("../models/yuvalist");
 const User = require("../models/user");
 const { v4: uuidv4 } = require('uuid');
-const { idsFilter, idOrObjectIdFilter, sanitizeUpdatePayload } = require("../utils/childCount");
+const { idsFilter, idOrObjectIdFilter, sanitizeUpdatePayload, findByAnyId } = require("../utils/childCount");
 const { deleteYuvaImages } = require("../utils/s3");
-const { getPublicYuvaById } = require("../utils/yuvaPublic");
+const { getPublicYuvaById, pickYuvaFields, MEMBER_YUVA_SELECT, MEMBER_YUVA_KEYS } = require("../utils/yuvaPublic");
+const { verifyToken, errorCheck } = require("../utils/auth");
+const { escapeRegex } = require("../utils/escapeRegex");
 const {
   findAccountByTokenId,
   samajValueKeys,
@@ -30,32 +31,6 @@ const {
 const { attachLinkedRoute } = require("../utils/linkedRecords");
 const { recordActivity, recordActivityMany } = require("../utils/activityLog");
 
-const verifyToken = (req, res, next) => {
-  const authHeader = req.headers.authorization;
-  if (authHeader) {
-    try {
-      const decoded = jwt.verify(
-        authHeader.replace("Bearer ", ""),
-        process.env.JWT_SECRET
-      );
-      req.user = {
-        email: decoded.email,
-        role: decoded.role,
-        id: decoded.id,
-      };
-    } catch (error) {
-      req.error = {
-        message: error.name,
-      };
-    }
-  } else {
-    req.error = {
-      message: "no-token",
-    };
-  }
-  next();
-};
-
 router.get("/public/:id", async (req, res) => {
   try {
     const yuva = await getPublicYuvaById(req.params.id);
@@ -68,20 +43,7 @@ router.get("/public/:id", async (req, res) => {
   }
 });
 
-router.use(verifyToken);
-
-const errorCheck = (req, res) => {
-  if (req.hasOwnProperty("error")) {
-    const { message } = req.error;
-    res.status(401).send({
-      message: message === "no-token" ? "Please sign in." : "Session expired. Sign in again.",
-    });
-    return true;
-  } else {
-    return false;
-  }
-};
-
+router.use(verifyToken());
 attachLinkedRoute(router, "yuva", errorCheck);
 
 const toQueryArray = (value) => {
@@ -125,9 +87,6 @@ const dobRangeForAge = (minAge, maxAge) => {
   }
   return Object.keys(dob).length ? { dob } : null;
 };
-
-const escapeRegex = (value) =>
-  String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 const containsClause = (field, value) => {
   if (value == null || String(value).trim() === "") {
@@ -284,10 +243,14 @@ const mergeFilters = (searchFilter, extraFilter) => {
   return { $and: [search, extra] };
 };
 
-const sendPagedYuvas = async (res, filter, page, limit) => {
+const sendPagedYuvas = async (res, filter, page, limit, limited) => {
   const offset = (page - 1) * limit;
+  let query = Yuvalist.find(filter);
+  if (limited) {
+    query = query.select(MEMBER_YUVA_SELECT);
+  }
   const [data, total] = await Promise.all([
-    Yuvalist.find(filter).skip(offset).limit(limit).exec(),
+    query.skip(offset).limit(limit).exec(),
     Yuvalist.countDocuments(filter),
   ]);
   res.status(200).json({
@@ -358,7 +321,7 @@ router.get("/list", async (req, res) => {
       buildYuvaListFilter(req.query),
       await getYuvaListScopeFilter(req)
     );
-    await sendPagedYuvas(res, filter, page, limit);
+    await sendPagedYuvas(res, filter, page, limit, String(req.user.role).toUpperCase() === "USER");
   } catch (e) {
     console.error("yuva list failed", e);
     res.status(500).json({ message: "Could not load data." });
@@ -369,10 +332,7 @@ router.get("/get-all-list", async (req, res) => {
   if (!errorCheck(req, res)) {
     const {id, role} = req.user;
     if(role === "USER") {
-      const dbYuva = await Yuvalist.find({
-        active: { $eq: true }
-      });
-      res.status(200).json(dbYuva);
+      return res.status(403).json({ message: "You cannot do this." });
     }
     else if (role === "ADMIN") {
       const dbYuva = await Yuvalist.find();
@@ -411,7 +371,14 @@ router.get("/get-all-list", async (req, res) => {
 
 router.get("/list/:id", async (req, res) => {
   if (!errorCheck(req, res)) {
-    const dbYuva = await Yuvalist.findById(req.params.id);
+    const rows = await findByAnyId(Yuvalist, req.params.id);
+    const dbYuva = Array.isArray(rows) ? rows[0] : rows;
+    if (!dbYuva) {
+      return res.status(404).json({ message: "Profile not found." });
+    }
+    if (String(req.user.role).toUpperCase() === "USER") {
+      return res.json(pickYuvaFields(dbYuva, MEMBER_YUVA_KEYS));
+    }
     res.json(dbYuva);
   }
 });

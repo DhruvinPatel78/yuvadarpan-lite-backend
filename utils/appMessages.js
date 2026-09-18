@@ -16,6 +16,7 @@ const messages = {
   otpVerified: "OTP verified.",
   otpInvalid: "Invalid OTP.",
   otpNotVerified: "Verify OTP first.",
+  tooManyAttempts: "Too many attempts. Try again later.",
   accountNotApproved: "Account is not approved yet.",
   loginFailed: "Email or password is incorrect.",
   passwordUpdated: "Password updated.",

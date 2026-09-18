@@ -3,53 +3,14 @@ const router = express.Router();
 const fs = require("fs");
 const path = require("path");
 const multer = require("multer");
-const jwt = require("jsonwebtoken");
 const { s3, BUCKET } = require("../utils/s3");
-const privateRoutes = ["POST", "DELETE", "PATCH"];
+const { verifyToken, errorCheck, WRITE_METHODS } = require("../utils/auth");
+const { rejectUnlessStaff } = require("../utils/managerScope");
 
-const verifyToken = (req, res, next) => {
-  if (privateRoutes.includes(req.method)) {
-    const authHeader = req.headers.authorization;
-    if (authHeader) {
-      jwt.verify(
-        authHeader.replace("Bearer ", ""),
-        process.env.JWT_SECRET,
-        (error, res) => {
-          if (res) {
-            req.user = {
-              email: res.email,
-              role: res.role,
-            };
-          } else {
-            req.error = {
-              message: error.name,
-            };
-          }
-        }
-      );
-    } else {
-      req.error = {
-        message: "no-token",
-      };
-    }
-  }
-  next();
-};
-const errorCheck = (req, res) => {
-  if (req.hasOwnProperty("error")) {
-    const { message } = req.error;
-    res.status(401).send({
-      message: message === "no-token" ? "Please sign in." : "Session expired. Sign in again.",
-    });
-    return true;
-  } else {
-    return false;
-  }
-};
 const storage = multer.diskStorage({});
 
 const upload = multer({ storage });
-router.use(verifyToken);
+router.use(verifyToken({ methods: WRITE_METHODS }));
 
 const sanitizeFilename = (name, originalname) => {
   const ext = (path.extname(originalname || "") || ".jpg").toLowerCase();
@@ -65,7 +26,9 @@ const sanitizeFilename = (name, originalname) => {
 };
 
 router.post("/upload", upload.single("image"), async (req, res) => {
-  if (!errorCheck(req, res)) {
+  if (errorCheck(req, res) || rejectUnlessStaff(req, res)) {
+    return;
+  }
     const file = req?.file;
     const filename = sanitizeFilename(req.body?.filename, file.originalname);
     const params = {
@@ -88,6 +51,5 @@ router.post("/upload", upload.single("image"), async (req, res) => {
     } catch (error) {
       res.status(500).json({ message: "Could not upload image." });
     }
-  }
 });
 module.exports = router;
