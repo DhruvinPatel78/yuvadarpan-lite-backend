@@ -14,6 +14,10 @@ const OTPSchema = new mongoose.Schema({
     type: Boolean,
     default: false,
   },
+  consumed: {
+    type: Boolean,
+    default: false,
+  },
   createdAt: {
     type: Date,
     default: Date.now,

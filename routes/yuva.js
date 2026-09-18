@@ -1,48 +1,9 @@
 const express = require("express");
-const jwt = require("jsonwebtoken");
 const router = express.Router();
 const Yuva = require("../models/yuva");
+const { verifyToken, errorCheck } = require("../utils/auth");
 
-const verifyToken = (req, res, next) => {
-  const authHeader = req.headers.authorization;
-  if (authHeader) {
-    jwt.verify(
-      authHeader.replace("Bearer ", ""),
-      process.env.JWT_SECRET,
-      (error, res) => {
-        if (res) {
-          req.user = {
-            email: res.email,
-            role: res.role,
-          };
-        } else {
-          req.error = {
-            message: error.name,
-          };
-        }
-      }
-    );
-  } else {
-    req.error = {
-      message: "no-token",
-    };
-  }
-  next();
-};
-
-router.use(verifyToken);
-
-const errorCheck = (req, res) => {
-  if (req.hasOwnProperty("error")) {
-    const { message } = req.error;
-    res.status(401).send({
-      message: message === "no-token" ? "Please sign in." : "Session expired. Sign in again.",
-    });
-    return true;
-  } else {
-    return false;
-  }
-};
+router.use(verifyToken());
 
 router.get("/list", async (req, res) => {
   if (!errorCheck(req, res)) {
@@ -52,11 +13,17 @@ router.get("/list", async (req, res) => {
 });
 
 router.post("/:id", async (req, res) => {
+  if (errorCheck(req, res)) {
+    return;
+  }
   const dbYuva = await Yuva.findById(req.params.id);
   res.send(dbYuva);
 });
 
 router.post("/addYuva", async (req, res) => {
+  if (errorCheck(req, res)) {
+    return;
+  }
   const yuva = req.body;
   const user = req.user;
   if (user.role === "ADMIN") {

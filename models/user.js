@@ -65,6 +65,16 @@ const userSchema = new mongoose.Schema({
         transform: (doc, ret) => {
             ret.id = ret._id;
             delete ret._id;
+            delete ret.password;
+            return ret;
+        }
+    },
+    toObject: {
+        virtuals: true,
+        transform: (doc, ret) => {
+            ret.id = ret._id;
+            delete ret._id;
+            delete ret.password;
             return ret;
         }
     }
