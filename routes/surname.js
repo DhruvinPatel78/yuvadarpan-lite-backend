@@ -1,54 +1,13 @@
 const express = require("express");
 const router = express.Router();
 const Surname = require("../models/surname");
-const jwt = require("jsonwebtoken");
 const { idsFilter, idOrObjectIdFilter, sanitizeUpdatePayload } = require("../utils/childCount");
 const { rejectLocationMasterWrite } = require("../utils/managerScope");
 const { attachLinkedRoute } = require("../utils/linkedRecords");
+const { verifyToken, errorCheck, WRITE_METHODS } = require("../utils/auth");
+const { escapeRegex } = require("../utils/escapeRegex");
 
-const privateRoutes = ["POST", "DELETE", "PATCH"];
-
-const verifyToken = (req, res, next) => {
-  if (privateRoutes.includes(req.method)) {
-    const authHeader = req.headers.authorization;
-    if (authHeader) {
-      try {
-        const decoded = jwt.verify(
-          authHeader.replace("Bearer ", ""),
-          process.env.JWT_SECRET,
-        );
-        req.user = {
-          email: decoded.email,
-          role: decoded.role,
-          id: decoded.id,
-        };
-      } catch (error) {
-        req.error = {
-          message: error.name,
-        };
-      }
-    } else {
-      req.error = {
-        message: "no-token",
-      };
-    }
-  }
-  next();
-};
-
-const errorCheck = (req, res) => {
-  if (req.hasOwnProperty("error")) {
-    const { message } = req.error;
-    res.status(401).send({
-      message: message === "no-token" ? "Please sign in." : "Session expired. Sign in again.",
-    });
-    return true;
-  } else {
-    return false;
-  }
-};
-
-router.use(verifyToken);
+router.use(verifyToken({ methods: WRITE_METHODS }));
 attachLinkedRoute(router, "surname", errorCheck);
 
 // Get all Surname
@@ -60,12 +19,12 @@ router.get("/list", async (req, res) => {
   const Name = {
     ...(name
       ? {
-          name: { $regex: new RegExp(name, "i") },
+          name: { $regex: new RegExp(escapeRegex(name), "i") },
         }
       : {}),
     ...(gotra
       ? {
-          gotra: { $regex: new RegExp(gotra, "i") },
+          gotra: { $regex: new RegExp(escapeRegex(gotra), "i") },
         }
       : {}),
   };

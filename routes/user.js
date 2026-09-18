@@ -2,6 +2,7 @@ const express = require("express");
 const router = express.Router();
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
+const { verifyToken } = require("../utils/auth");
 const User = require("../models/user");
 const OtpGenerator = require("otp-generator");
 const OTP = require("../models/OTP");
@@ -33,30 +34,10 @@ const {
   regionValueKeys,
   regionIdsForState,
   regionIdsForCountry,
+  isAdmin: isAdminRole,
+  isLocationMasterReadOnly,
 } = require("../utils/managerScope");
 const { attachLinkedRoute } = require("../utils/linkedRecords");
-
-const verifyToken = (req, res, next) => {
-  const authHeader = req.headers.authorization;
-  if (!authHeader) {
-    req.error = { message: "no-token" };
-    return next();
-  }
-  try {
-    const decoded = jwt.verify(
-      String(authHeader).replace(/^Bearer\s+/i, "").trim(),
-      process.env.JWT_SECRET,
-    );
-    req.user = {
-      email: decoded.email,
-      role: decoded.role,
-      id: decoded.id,
-    };
-  } catch (error) {
-    req.error = { message: error.name };
-  }
-  next();
-};
 
 const createUniqueOtp = async () => {
   for (let attempt = 0; attempt < 8; attempt += 1) {
@@ -85,14 +66,49 @@ const errorCheck = (req, res) => {
   }
 };
 
-router.use(verifyToken);
+const resetAttempts = new Map();
+
+const limitResetAttempts = (req, res, next) => {
+  const ip =
+    String(req.headers["x-forwarded-for"] || "")
+      .split(",")[0]
+      .trim() ||
+    req.ip ||
+    "unknown";
+  const email = String(req.body?.email || "").trim().toLowerCase();
+  const key = `${ip}:${email}`;
+  const now = Date.now();
+  const windowMs = 15 * 60 * 1000;
+  if (resetAttempts.size > 2000) {
+    for (const [storedKey, entry] of resetAttempts) {
+      if (now - entry.start > windowMs) {
+        resetAttempts.delete(storedKey);
+      }
+    }
+  }
+  const entry = resetAttempts.get(key);
+  if (!entry || now - entry.start > windowMs) {
+    resetAttempts.set(key, { start: now, count: 1 });
+    return next();
+  }
+  entry.count += 1;
+  if (entry.count > 8) {
+    return res.status(429).json({ message: appMessages.tooManyAttempts });
+  }
+  next();
+};
+
+const canManageUsers = (role) =>
+  isAdminRole(role) || isLocationMasterReadOnly(role);
+
+router.use(verifyToken());
 attachLinkedRoute(router, "user", errorCheck);
 
 router.get("/me", async (req, res) => {
   if (!errorCheck(req, res)) {
     const user = await findAccountByTokenId(req.user.id);
-    if (!user) {
-      return res.status(404).json({ message: appMessages.userNotFound });
+    if (!user || user.allowed === false || user.active === false) {
+      return res.status(401).json({ message: appMessages.tokenExpired });
     }
     const safeUser = user.toObject ? user.toObject() : { ...user };
     delete safeUser.password;
@@ -104,6 +120,9 @@ router.get("/me", async (req, res) => {
 
 router.get("/list", async (req, res) => {
   if (!errorCheck(req, res)) {
+    if (!canManageUsers(req.user?.role)) {
+      return res.status(403).json({ message: appMessages.notAllowed });
+    }
     const { id, role } = req.user;
     const {
       lastName = [],
@@ -190,234 +209,40 @@ router.get("/list", async (req, res) => {
       ...Email,
       ...Roles,
     };
-    if (role === "ADMIN") {
-      const users = await User.find({ ...filterSearch })
-        .sort({ id: -1 })
-        .skip(offset)
-        .limit(limit)
-        .exec();
-      const totalItems = await User.countDocuments({ ...filterSearch });
-      const totalPages = Math.ceil(totalItems / limit);
-      res
-        .status(200)
-        .json({ total: totalItems, page, totalPages, data: users });
-    } else if (role === "REGION_MANAGER") {
-      const ownRegion =
-        req.query.ownRegion === true ||
-        String(req.query.ownRegion).toLowerCase() === "true";
-      if (!ownRegion) {
-        const users = await User.find({ ...filterSearch })
-          .sort({ id: -1 })
-          .skip(offset)
-          .limit(limit)
-          .exec();
-        const totalItems = await User.countDocuments({ ...filterSearch });
-        const totalPages = Math.ceil(totalItems / limit);
-        res
-          .status(200)
-          .json({ total: totalItems, page, totalPages, data: users });
-      } else {
-        const manager = await findAccountByTokenId(id);
-        const managerQuery = {
-          ...filterSearch,
-          ...(await usersInManagerRegionQuery(manager)),
-        };
-        const MangerUsers = await User.find(managerQuery)
-          .sort({ id: -1 })
-          .skip(offset)
-          .limit(limit)
-          .exec();
-        const managerTotalItem = await User.countDocuments(managerQuery);
-        const totalPages = Math.ceil(managerTotalItem / limit);
-        res.status(200).json({
-          total: managerTotalItem,
-          page,
-          totalPages,
-          data: MangerUsers,
-        });
-      }
-    } else if (role === "STATE_MANAGER") {
-      const ownState =
-        req.query.ownState === true ||
-        String(req.query.ownState).toLowerCase() === "true";
-      if (!ownState) {
-        const users = await User.find({ ...filterSearch })
-          .sort({ id: -1 })
-          .skip(offset)
-          .limit(limit)
-          .exec();
-        const totalItems = await User.countDocuments({ ...filterSearch });
-        const totalPages = Math.ceil(totalItems / limit);
-        res
-          .status(200)
-          .json({ total: totalItems, page, totalPages, data: users });
-      } else {
-        const manager = await findAccountByTokenId(id);
-        const managerQuery = {
-          ...filterSearch,
-          ...(await usersInManagerStateQuery(manager)),
-        };
-        const MangerUsers = await User.find(managerQuery)
-          .sort({ id: -1 })
-          .skip(offset)
-          .limit(limit)
-          .exec();
-        const managerTotalItem = await User.countDocuments(managerQuery);
-        const totalPages = Math.ceil(managerTotalItem / limit);
-        res.status(200).json({
-          total: managerTotalItem,
-          page,
-          totalPages,
-          data: MangerUsers,
-        });
-      }
-    } else if (role === "COUNTRY_MANAGER") {
-      const ownCountry =
-        req.query.ownCountry === true ||
-        String(req.query.ownCountry).toLowerCase() === "true";
-      if (!ownCountry) {
-        const users = await User.find({ ...filterSearch })
-          .sort({ id: -1 })
-          .skip(offset)
-          .limit(limit)
-          .exec();
-        const totalItems = await User.countDocuments({ ...filterSearch });
-        const totalPages = Math.ceil(totalItems / limit);
-        res
-          .status(200)
-          .json({ total: totalItems, page, totalPages, data: users });
-      } else {
-        const manager = await findAccountByTokenId(id);
-        const managerQuery = {
-          ...filterSearch,
-          ...(await usersInManagerCountryQuery(manager)),
-        };
-        const MangerUsers = await User.find(managerQuery)
-          .sort({ id: -1 })
-          .skip(offset)
-          .limit(limit)
-          .exec();
-        const managerTotalItem = await User.countDocuments(managerQuery);
-        const totalPages = Math.ceil(managerTotalItem / limit);
-        res.status(200).json({
-          total: managerTotalItem,
-          page,
-          totalPages,
-          data: MangerUsers,
-        });
-      }
-    } else if (role === "SAMAJ_MANAGER") {
-      const ownSamaj =
-        req.query.ownSamaj === true ||
-        String(req.query.ownSamaj).toLowerCase() === "true";
-      if (!ownSamaj) {
-        const users = await User.find({ ...filterSearch })
-          .sort({ id: -1 })
-          .skip(offset)
-          .limit(limit)
-          .exec();
-        const totalItems = await User.countDocuments({ ...filterSearch });
-        const totalPages = Math.ceil(totalItems / limit);
-        res
-          .status(200)
-          .json({ total: totalItems, page, totalPages, data: users });
-      } else {
-        const mangerSamaj = await findAccountByTokenId(id);
-        const samajKeys = await samajValueKeys(mangerSamaj?.localSamaj);
-        const managerQuery = {
-          ...filterSearch,
-          localSamaj: { $in: samajKeys },
-        };
-        const MangerUsers = await User.find(managerQuery)
-          .sort({ id: -1 })
-          .skip(offset)
-          .limit(limit)
-          .exec();
-        const managerTotalItem = await User.countDocuments(managerQuery);
-        const totalPages = Math.ceil(managerTotalItem / limit);
-        res.status(200).json({
-          total: managerTotalItem,
-          page,
-          totalPages,
-          data: MangerUsers,
-        });
-      }
-    } else if (role === "CITY_MANAGER") {
-      const ownCity =
-        req.query.ownCity === true ||
-        String(req.query.ownCity).toLowerCase() === "true";
-      if (!ownCity) {
-        const users = await User.find({ ...filterSearch })
-          .sort({ id: -1 })
-          .skip(offset)
-          .limit(limit)
-          .exec();
-        const totalItems = await User.countDocuments({ ...filterSearch });
-        const totalPages = Math.ceil(totalItems / limit);
-        res
-          .status(200)
-          .json({ total: totalItems, page, totalPages, data: users });
-      } else {
-        const manager = await findAccountByTokenId(id);
-        const managerQuery = {
-          ...filterSearch,
-          ...(await usersInManagerCityQuery(manager)),
-        };
-        const MangerUsers = await User.find(managerQuery)
-          .sort({ id: -1 })
-          .skip(offset)
-          .limit(limit)
-          .exec();
-        const managerTotalItem = await User.countDocuments(managerQuery);
-        const totalPages = Math.ceil(managerTotalItem / limit);
-        res.status(200).json({
-          total: managerTotalItem,
-          page,
-          totalPages,
-          data: MangerUsers,
-        });
-      }
-    } else if (role === "DISTRICT_MANAGER") {
-      const ownDistrict =
-        req.query.ownDistrict === true ||
-        String(req.query.ownDistrict).toLowerCase() === "true";
-      if (!ownDistrict) {
-        const users = await User.find({ ...filterSearch })
-          .sort({ id: -1 })
-          .skip(offset)
-          .limit(limit)
-          .exec();
-        const totalItems = await User.countDocuments({ ...filterSearch });
-        const totalPages = Math.ceil(totalItems / limit);
-        res
-          .status(200)
-          .json({ total: totalItems, page, totalPages, data: users });
-      } else {
-        const manager = await findAccountByTokenId(id);
-        const managerQuery = {
-          ...filterSearch,
-          ...(await usersInManagerDistrictQuery(manager)),
-        };
-        const MangerUsers = await User.find(managerQuery)
-          .sort({ id: -1 })
-          .skip(offset)
-          .limit(limit)
-          .exec();
-        const managerTotalItem = await User.countDocuments(managerQuery);
-        const totalPages = Math.ceil(managerTotalItem / limit);
-        res.status(200).json({
-          total: managerTotalItem,
-          page,
-          totalPages,
-          data: MangerUsers,
-        });
+    const query = { ...filterSearch };
+    if (role !== "ADMIN") {
+      const manager = await findAccountByTokenId(id);
+      if (role === "SAMAJ_MANAGER") {
+        query.localSamaj = { $in: await samajValueKeys(manager?.localSamaj) };
+      } else if (role === "CITY_MANAGER") {
+        Object.assign(query, await usersInManagerCityQuery(manager));
+      } else if (role === "DISTRICT_MANAGER") {
+        Object.assign(query, await usersInManagerDistrictQuery(manager));
+      } else if (role === "REGION_MANAGER") {
+        Object.assign(query, await usersInManagerRegionQuery(manager));
+      } else if (role === "STATE_MANAGER") {
+        Object.assign(query, await usersInManagerStateQuery(manager));
+      } else if (role === "COUNTRY_MANAGER") {
+        Object.assign(query, await usersInManagerCountryQuery(manager));
       }
     }
+    const users = await User.find(query)
+      .select("-password")
+      .sort({ id: -1 })
+      .skip(offset)
+      .limit(limit)
+      .exec();
+    const totalItems = await User.countDocuments(query);
+    const totalPages = Math.ceil(totalItems / limit);
+    res.status(200).json({ total: totalItems, page, totalPages, data: users });
   }
 });
 
 router.get("/requests", async (req, res) => {
   if (!errorCheck(req, res)) {
+    if (!canManageUsers(req.user?.role)) {
+      return res.status(403).json({ message: appMessages.notAllowed });
+    }
     const { id, role } = req.user;
     const {
       lastName = [],
@@ -644,6 +469,9 @@ router.post("/add", async (req, res) => {
     if (errorCheck(req, res)) {
       return;
     }
+    if (!canManageUsers(req.user?.role)) {
+      return res.status(403).json({ message: appMessages.notAllowed });
+    }
     const user = { ...req.body };
     delete user.confirmPassword;
     if (user.role && typeof user.role === "object") {
@@ -686,6 +514,13 @@ router.post("/add", async (req, res) => {
       actorRole === "COUNTRY_MANAGER"
     ) {
       user.role = "USER";
+    }
+    if (actorRole === "SAMAJ_MANAGER") {
+      const manager = await findAccountByTokenId(req.user.id);
+      const samajKeys = await samajValueKeys(manager?.localSamaj);
+      if (!user.localSamaj || !samajKeys.includes(String(user.localSamaj))) {
+        return res.status(403).json({ message: appMessages.notAllowed });
+      }
     }
     if (actorRole === "CITY_MANAGER") {
       const manager = await findAccountByTokenId(req.user.id);
@@ -800,6 +635,7 @@ router.post("/signup", async (req, res) => {
       createdBy: null,
       updatedBy: null,
       active: true,
+      role: "USER",
       allowed: false,
       fcmToken: user.fcmToken || null,
       language: user.language || "en",
@@ -809,7 +645,7 @@ router.post("/signup", async (req, res) => {
   }
 });
 
-router.post("/sendOtp", async (req, res) => {
+router.post("/sendOtp", limitResetAttempts, async (req, res) => {
   const { email } = req.body;
   const emailRegex = /^[\w-.]+@([\w-]+\.)+[\w-]{2,4}$/;
   const Email = email
@@ -821,10 +657,10 @@ router.post("/sendOtp", async (req, res) => {
           mobile: { $eq: email },
         }
     : {};
-  const dbUser = await User.findOne(Email).lean();
+  const dbUser = email ? await User.findOne(Email).lean() : null;
 
   if (!dbUser?.email) {
-    return res.status(404).send({ message: appMessages.emailInvalid });
+    return res.status(200).json({ message: appMessages.otpSent });
   }
   try {
     const otp = await createUniqueOtp();
@@ -841,7 +677,7 @@ router.post("/sendOtp", async (req, res) => {
   }
 });
 
-router.post("/verifyOtp", async (req, res) => {
+router.post("/verifyOtp", limitResetAttempts, async (req, res) => {
   const { email, otp } = req.body;
 
   const emailRegex = /^[\w-.]+@([\w-]+\.)+[\w-]{2,4}$/;
@@ -854,7 +690,7 @@ router.post("/verifyOtp", async (req, res) => {
           mobile: { $eq: email },
         }
     : {};
-  const isUserExit = await User.findOne(Email).lean();
+  const isUserExit = email ? await User.findOne(Email).lean() : null;
   if (isUserExit) {
     const isOtpExist = await OTP.findOne({ otp: otp, email: isUserExit.email });
     if (isOtpExist) {
@@ -874,7 +710,7 @@ router.post("/verifyOtp", async (req, res) => {
       return res.status(404).send({ message: appMessages.otpInvalid });
     }
   } else {
-    res.status(404).send({ message: appMessages.emailInvalid });
+    res.status(404).send({ message: appMessages.otpInvalid });
   }
 });
 
@@ -895,12 +731,12 @@ router.post("/signIn", async (req, res) => {
   if (dbUser !== null && dbUser !== undefined) {
     const passwordMatched = await bcrypt.compare(password, dbUser.password);
     if (passwordMatched) {
-      if (dbUser?.allowed) {
+      if (dbUser?.allowed && dbUser.active !== false) {
         const token = jwt.sign(
           { email: dbUser.email, role: dbUser.role, id: dbUser._id },
           process.env.JWT_SECRET,
           {
-            expiresIn: "30d",
+            expiresIn: "10d",
           },
         );
         const { password, ...rest } = dbUser;
@@ -937,6 +773,10 @@ router.patch("/update/:id", async (req, res) => {
       String(req.user.id) === String(currentUser._id) ||
       String(req.user.id) === String(currentUser.id);
     const actorIsAdmin = String(req.user.role || "").toUpperCase() === "ADMIN";
+
+    if (!isSelf && !canManageUsers(req.user.role)) {
+      return res.status(403).json({ message: appMessages.notAllowed });
+    }
 
     if (isSelf) {
       delete payload.role;
@@ -1091,6 +931,9 @@ router.patch("/update/:id", async (req, res) => {
 
 router.delete("/delete", async (req, res) => {
   if (!errorCheck(req, res)) {
+    if (!canManageUsers(req.user?.role)) {
+      return res.status(403).json({ message: appMessages.notAllowed });
+    }
     const data = req.body;
     const query = { _id: { $in: data.users } };
     if (req.user.role === "SAMAJ_MANAGER") {
@@ -1159,17 +1002,17 @@ router.patch("/changePassword", async (req, res) => {
     if (!manager?.email) {
       return res.status(404).send({ message: appMessages.emailInvalid });
     }
-    const verifiedOtp = await OTP.findOne({
-      email: manager.email,
-      verified: true,
-    });
+    const verifiedOtp = await OTP.findOneAndUpdate(
+      { email: manager.email, verified: true, consumed: { $ne: true } },
+      { $set: { consumed: true } },
+    );
     if (!verifiedOtp) {
       return res.status(403).json({ message: appMessages.otpNotVerified });
     }
     const now = new Date();
     const createdAt = new Date(verifiedOtp.createdAt);
     if ((now - createdAt) / 1000 > 300) {
-      await OTP.findByIdAndDelete(verifiedOtp._id);
+      await OTP.deleteMany({ email: manager.email });
       return res.status(410).send({ message: appMessages.otpExpired });
     }
     const newPassword = await bcrypt.hash(password, 10);
@@ -1189,8 +1032,11 @@ router.patch("/changePassword", async (req, res) => {
   }
 });
 
-router.patch("/forgotPassword", async (req, res) => {
+router.patch("/forgotPassword", limitResetAttempts, async (req, res) => {
   const { email, password } = req.body;
+  if (!password) {
+    return res.status(400).json({ message: appMessages.passwordRequired });
+  }
 
   const emailRegex = /^[\w-.]+@([\w-]+\.)+[\w-]{2,4}$/;
   const Email = email
@@ -1202,29 +1048,50 @@ router.patch("/forgotPassword", async (req, res) => {
           mobile: { $eq: email },
         }
     : {};
-  const isUserExits = await User.findOne(Email).lean();
+  const account = email ? await User.findOne(Email).lean() : null;
+  const fail = () =>
+    res.status(403).json({ message: appMessages.otpNotVerified });
 
-  if (isUserExits) {
-    const newPassword = await bcrypt.hash(password, 10);
-    await User.updateOne(
-      { id: isUserExits?.id },
-      {
-        $set: {
-          password: newPassword,
-          updatedAt: new Date(),
-          updatedBy: isUserExits.id,
-        },
-      },
-    );
-    await notifyAccountEvent(isUserExits, "PasswordChanged");
-    res.status(200).send({ message: appMessages.passwordUpdated });
-  } else {
-    res.status(404).send({ message: appMessages.emailInvalid });
+  if (!account?.email) {
+    return fail();
   }
+
+  const verifiedOtp = await OTP.findOneAndUpdate(
+    { email: account.email, verified: true, consumed: { $ne: true } },
+    { $set: { consumed: true } },
+  );
+  if (!verifiedOtp) {
+    return fail();
+  }
+
+  const now = new Date();
+  const createdAt = new Date(verifiedOtp.createdAt);
+  if ((now - createdAt) / 1000 > 300) {
+    await OTP.deleteMany({ email: account.email });
+    return res.status(410).send({ message: appMessages.otpExpired });
+  }
+
+  const newPassword = await bcrypt.hash(password, 10);
+  await User.updateOne(
+    { _id: account._id },
+    {
+      $set: {
+        password: newPassword,
+        updatedAt: new Date(),
+        updatedBy: account.id,
+      },
+    },
+  );
+  await OTP.deleteMany({ email: account.email });
+  await notifyAccountEvent(account, "PasswordChanged");
+  res.status(200).send({ message: appMessages.passwordUpdated });
 });
 
 router.patch("/approveRejectMany", async (req, res) => {
   if (!errorCheck(req, res)) {
+    if (!canManageUsers(req.user?.role)) {
+      return res.status(403).json({ message: appMessages.notAllowed });
+    }
     const { ids, action } = req.body;
     const isAccepting = action === "accept";
 
