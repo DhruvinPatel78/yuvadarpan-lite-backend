@@ -33,6 +33,7 @@ const { attachLinkedRoute } = require("../utils/linkedRecords");
 const { recordActivity, recordActivityMany } = require("../utils/activityLog");
 const { verifyToken, errorCheck, WRITE_METHODS } = require("../utils/auth");
 const { escapeRegex } = require("../utils/escapeRegex");
+const { prepareMasterName, nameContains } = require("../utils/masterName");
 
 router.use(verifyToken({ methods: WRITE_METHODS }));
 attachLinkedRoute(router, "samaj", errorCheck);
@@ -80,11 +81,7 @@ router.get("/list", async (req, res) => {
           city_id: { $in: city },
         }
       : {};
-  const Name = name
-    ? {
-        name: { $regex: new RegExp(escapeRegex(name), "i") },
-      }
-    : {};
+  const Name = nameContains(name, escapeRegex);
   const filter = {
     ...Country,
     ...State,
@@ -228,7 +225,7 @@ router.post("/add", async (req, res) => {
       data.country_id = countryId;
     }
     const dbSamaj = await Samaj.create({
-      ...data,
+      ...prepareMasterName(data),
       id: crypto.randomUUID().replace(/-/g, ""),
       active: true,
       createdAt: new Date(),
@@ -298,7 +295,7 @@ router.get("/getInfo/:id", async (req, res) => {
 router.patch("/update/:id", async (req, res) => {
   if (!errorCheck(req, res) && !rejectSamajManagerWrite(req, res)) {
     const { id } = req.params;
-    const payload = { ...req.body };
+    const payload = prepareMasterName({ ...req.body });
     let filter = idOrObjectIdFilter(id);
     if (isCityManager(req.user?.role)) {
       const manager = await findAccountByTokenId(req.user.id);

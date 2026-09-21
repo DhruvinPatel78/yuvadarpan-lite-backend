@@ -609,6 +609,7 @@ router.post("/add", async (req, res) => {
       active: true,
       allowed: isAdmin,
       fcmToken: user.fcmToken || null,
+      language: user.language === "en" ? "en" : "gu",
     });
     await notifyAccountEvent(
       dbUser,
@@ -670,7 +671,7 @@ router.post("/signup", async (req, res) => {
       role: "USER",
       allowed: false,
       fcmToken: user.fcmToken || null,
-      language: user.language || "en",
+        language: user.language === "en" ? "en" : "gu",
     });
     await notifyAccountEvent(dbUser, "RegistrationSuccess");
     res.send(dbUser);
@@ -790,6 +791,9 @@ router.patch("/update/:id", async (req, res) => {
   if (!errorCheck(req, res)) {
     const { id } = req.params;
     const payload = { ...req.body };
+    if (payload.language) {
+      payload.language = payload.language === "en" ? "en" : "gu";
+    }
 
     // Get current user data before update
     const currentUser =
