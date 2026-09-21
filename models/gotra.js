@@ -1,4 +1,5 @@
 const mongoose = require("mongoose");
+const { withMasterName, masterNameFields } = require("../utils/masterName");
 
 const gotraSchema = new mongoose.Schema(
   {
@@ -6,10 +7,7 @@ const gotraSchema = new mongoose.Schema(
       type: String,
       required: true,
     },
-    name: {
-      type: String,
-      required: true,
-    },
+    name: masterNameFields,
     active: Boolean,
     createdAt: Date,
     updatedAt: Date,
@@ -27,6 +25,8 @@ const gotraSchema = new mongoose.Schema(
     },
   },
 );
+
+withMasterName(gotraSchema);
 
 const Gotra = mongoose.model("Gotra", gotraSchema);
 

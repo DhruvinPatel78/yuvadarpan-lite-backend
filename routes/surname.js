@@ -6,6 +6,7 @@ const { rejectLocationMasterWrite } = require("../utils/managerScope");
 const { attachLinkedRoute } = require("../utils/linkedRecords");
 const { verifyToken, errorCheck, WRITE_METHODS } = require("../utils/auth");
 const { escapeRegex } = require("../utils/escapeRegex");
+const { prepareMasterName, nameContains } = require("../utils/masterName");
 
 router.use(verifyToken({ methods: WRITE_METHODS }));
 attachLinkedRoute(router, "surname", errorCheck);
@@ -17,11 +18,7 @@ router.get("/list", async (req, res) => {
   const offset = (page - 1) * limit;
   const { name, gotra } = req.query;
   const Name = {
-    ...(name
-      ? {
-          name: { $regex: new RegExp(escapeRegex(name), "i") },
-        }
-      : {}),
+    ...nameContains(name, escapeRegex),
     ...(gotra
       ? {
           gotra: { $regex: new RegExp(escapeRegex(gotra), "i") },
@@ -46,7 +43,7 @@ router.post("/add", async (req, res) => {
   if (!errorCheck(req, res) && !rejectLocationMasterWrite(req, res)) {
     const data = req.body;
     const dbSurname = await Surname.create({
-      ...data,
+      ...prepareMasterName(data),
       id: crypto.randomUUID().replace(/-/g, ""),
       active: true,
       createdAt: new Date(),
@@ -80,7 +77,7 @@ router.patch("/update/:id", async (req, res) => {
   }
   try {
     const { id } = req.params;
-    const payload = sanitizeUpdatePayload({ ...req.body });
+    const payload = sanitizeUpdatePayload(prepareMasterName({ ...req.body }));
     const result = await Surname.updateOne(idOrObjectIdFilter(id), {
       $set: {
         ...payload,

@@ -10,7 +10,7 @@ const Native = require("../models/native");
 const Role = require("../models/role");
 const User = require("../models/user");
 const Yuvalist = require("../models/yuvalist");
-const { idsFilter } = require("./childCount");
+const { nameText, pairText } = require("./masterName");
 
 const ITEM_LIMIT = 100;
 const PERSON_SELECT = "id firstName middleName fatherName lastName name email allowed";
@@ -49,13 +49,17 @@ const findByField = async (Model, field, keys, extra = {}, select = NAME_SELECT)
 };
 
 const personName = (doc) => {
-  const name = [doc?.firstName, doc?.middleName, doc?.fatherName]
+  const name = [
+    pairText(doc?.firstName),
+    pairText(doc?.middleName),
+    pairText(doc?.fatherName),
+  ]
     .filter(Boolean)
     .join(" ");
-  return name || doc?.name || doc?.email || "Unnamed";
+  return name || pairText(doc?.name) || doc?.email || "Unnamed";
 };
 
-const placeName = (doc) => doc?.name || doc?.label || "Unnamed";
+const placeName = (doc) => nameText(doc) || doc?.label || "Unnamed";
 
 const toPersonItems = (docs = []) =>
   docs.map((doc) => ({
@@ -278,7 +282,7 @@ const getGotraLinks = async (ids) => {
   const gotras = await Gotra.find(idsFilter(gotraKeys)).select("id name").lean();
   const matchKeys = uniqueKeys(
     gotraKeys,
-    gotras.map((item) => item.name),
+    gotras.map((item) => nameText(item)),
   );
   const surnames = await findByField(Surname, "gotra", matchKeys);
   return [group("surnames", "Surname", surnames, toPlaceItems)];

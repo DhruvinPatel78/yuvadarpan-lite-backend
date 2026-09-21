@@ -1,14 +1,12 @@
 const mongoose = require("mongoose");
+const { withMasterName, masterNameFields } = require("../utils/masterName");
 
 const surNameSchema = new mongoose.Schema({
   id: {
     type: String,
     required: true,
   },
-  name: {
-    type: String,
-    required: true,
-  },
+  name: masterNameFields,
   gotra: {
     type: String,
     required: true,
@@ -32,6 +30,8 @@ const surNameSchema = new mongoose.Schema({
         }
     }
 });
+
+withMasterName(surNameSchema);
 
 const Surname = mongoose.model("Surname", surNameSchema);
 

@@ -1,14 +1,12 @@
 const mongoose = require("mongoose");
+const { withMasterName, masterNameFields } = require("../utils/masterName");
 
 const samajSchema = new mongoose.Schema({
   id: {
     type: String,
     required: true,
   },
-  name: {
-    type: String,
-    required: true,
-  },
+  name: masterNameFields,
   label: {
     type: String,
     required: true,
@@ -52,6 +50,8 @@ const samajSchema = new mongoose.Schema({
         }
     }
 });
+
+withMasterName(samajSchema);
 
 const Samaj = mongoose.model("Samaj", samajSchema);
 

@@ -1,14 +1,12 @@
 const mongoose = require("mongoose");
+const { withMasterName, masterNameFields } = require("../utils/masterName");
 
 const stateSchema = new mongoose.Schema({
   id: {
     type: String,
     required: true,
   },
-  name: {
-    type: String,
-    required: true,
-  },
+  name: masterNameFields,
   country_id: {
     type: String,
     required: true,
@@ -28,6 +26,8 @@ const stateSchema = new mongoose.Schema({
         }
     }
 });
+
+withMasterName(stateSchema);
 
 const State = mongoose.model("State", stateSchema);
 

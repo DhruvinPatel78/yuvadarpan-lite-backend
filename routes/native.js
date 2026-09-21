@@ -5,6 +5,7 @@ const { rejectLocationMasterWrite } = require("../utils/managerScope");
 const { attachLinkedRoute } = require("../utils/linkedRecords");
 const { verifyToken, errorCheck, requireAuth } = require("../utils/auth");
 const { escapeRegex } = require("../utils/escapeRegex");
+const { prepareMasterName, nameContains } = require("../utils/masterName");
 const { findByAnyId } = require("../utils/childCount");
 
 router.use(verifyToken());
@@ -17,11 +18,7 @@ router.get("/list", async (req, res) => {
   const limit = parseInt(req.query.limit, 10) || 10;
   const offset = (page - 1) * limit;
   const { name } = req.query;
-  const Name = name
-    ? {
-        name: { $regex: new RegExp(escapeRegex(name), "i") },
-      }
-    : {};
+  const Name = nameContains(name, escapeRegex);
   const Natives = await Native.find({ ...Name })
     .skip(offset)
     .limit(limit)
@@ -40,7 +37,7 @@ router.post("/add", async (req, res) => {
   if (!errorCheck(req, res) && !rejectLocationMasterWrite(req, res)) {
     const data = req.body;
     const dbNative = await Native.create({
-      ...data,
+      ...prepareMasterName(data),
       id: crypto.randomUUID().replace(/-/g, ""),
       active: true,
       createdAt: new Date(),
@@ -70,7 +67,7 @@ router.get("/getInfo/:id", async (req, res) => {
 router.patch("/update/:id", async (req, res) => {
   if (!errorCheck(req, res) && !rejectLocationMasterWrite(req, res)) {
     const { id } = req.params;
-    const payload = { ...req.body };
+    const payload = prepareMasterName({ ...req.body });
     await Native.updateOne(
       { id: id },
       { ...payload, updatedAt: new Date(), updatedBy: req?.user.id },

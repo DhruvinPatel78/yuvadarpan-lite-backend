@@ -30,6 +30,21 @@ const {
 } = require("../utils/managerScope");
 const { attachLinkedRoute } = require("../utils/linkedRecords");
 const { recordActivity, recordActivityMany } = require("../utils/activityLog");
+const { prepareYuvaRecord, withEnGu, omitGu } = require("../utils/yuvaGu");
+
+const dropStoredGu = async (docs = []) => {
+  const ids = docs.map((doc) => doc?._id).filter(Boolean);
+  if (!ids.length) {
+    return;
+  }
+  await Yuvalist.collection.updateMany({ _id: { $in: ids } }, { $unset: { gu: "" } });
+};
+
+router.use((req, res, next) => {
+  const sendJson = res.json.bind(res);
+  res.json = (body) => sendJson(omitGu(body));
+  next();
+});
 
 router.get("/public/:id", async (req, res) => {
   try {
@@ -97,18 +112,35 @@ const containsClause = (field, value) => {
   };
 };
 
+const bilingualContains = (field, value) => {
+  if (value == null || String(value).trim() === "") {
+    return null;
+  }
+  const rx = { $regex: escapeRegex(String(value).trim()), $options: "i" };
+  return {
+    $or: [
+      { [`${field}.en`]: rx },
+      { [`${field}.gu`]: rx },
+      { [field]: rx },
+      { [`${field}En`]: rx },
+      { [`${field}Gu`]: rx },
+    ],
+  };
+};
+
 const exactAnyClause = (field, values) => {
   const list = toQueryArray(values);
   if (!list.length) {
     return null;
   }
   return {
-    $or: list.map((item) => ({
-      [field]: {
+    $or: list.flatMap((item) => {
+      const rx = {
         $regex: `^${escapeRegex(String(item).trim())}$`,
         $options: "i",
-      },
-    })),
+      };
+      return [{ [field]: rx }, { [`${field}.en`]: rx }, { [`${field}.gu`]: rx }];
+    }),
   };
 };
 
@@ -173,10 +205,10 @@ const buildYuvaListFilter = (query = {}) => {
   }
   [
     containsClause("familyId", query.familyId),
-    containsClause("firstName", query.firstName),
-    containsClause("fatherName", query.fatherName),
-    containsClause("grandFatherName", query.grandFatherName),
-    containsClause("firm", query.firmName || query.firm),
+    bilingualContains("firstName", query.firstName),
+    bilingualContains("fatherName", query.fatherName),
+    bilingualContains("grandFatherName", query.grandFatherName),
+    bilingualContains("firm", query.firmName || query.firm),
   ]
     .filter(Boolean)
     .forEach((clause) => clauses.push(clause));
@@ -203,13 +235,39 @@ const buildYuvaListFilter = (query = {}) => {
   if (search) {
     const rx = { $regex: escapeRegex(search), $options: "i" };
     const nameOr = [
+      { "firstName.en": rx },
+      { "firstName.gu": rx },
       { firstName: rx },
+      { "fatherName.en": rx },
+      { "fatherName.gu": rx },
       { fatherName: rx },
+      { "grandFatherName.en": rx },
+      { "grandFatherName.gu": rx },
       { grandFatherName: rx },
+      { "motherName.en": rx },
+      { "motherName.gu": rx },
       { motherName: rx },
       { familyId: rx },
+      { "firm.en": rx },
+      { "firm.gu": rx },
       { firm: rx },
       { gender: rx },
+      { "gender.en": rx },
+      { "gender.gu": rx },
+      { "martialStatus.en": rx },
+      { "martialStatus.gu": rx },
+      { "activity.en": rx },
+      { "activity.gu": rx },
+      { firstNameEn: rx },
+      { firstNameGu: rx },
+      { fatherNameEn: rx },
+      { fatherNameGu: rx },
+      { grandFatherNameEn: rx },
+      { grandFatherNameGu: rx },
+      { motherNameEn: rx },
+      { motherNameGu: rx },
+      { firmEn: rx },
+      { firmGu: rx },
     ];
     const searchPhone = phoneMatch(search);
     if (searchPhone) {
@@ -245,7 +303,7 @@ const mergeFilters = (searchFilter, extraFilter) => {
 
 const sendPagedYuvas = async (res, filter, page, limit, limited) => {
   const offset = (page - 1) * limit;
-  let query = Yuvalist.find(filter);
+  let query = Yuvalist.find(filter).select("-gu");
   if (limited) {
     query = query.select(MEMBER_YUVA_SELECT);
   }
@@ -257,7 +315,7 @@ const sendPagedYuvas = async (res, filter, page, limit, limited) => {
     total,
     page,
     totalPages: Math.ceil(total / limit) || 0,
-    data,
+    data: data.map(withEnGu),
   });
 };
 
@@ -336,35 +394,35 @@ router.get("/get-all-list", async (req, res) => {
     }
     else if (role === "ADMIN") {
       const dbYuva = await Yuvalist.find();
-      res.status(200).json(dbYuva);
+      res.status(200).json(dbYuva.map(withEnGu));
     } else if (role === "REGION_MANAGER") {
       const manager = await findAccountByTokenId(id);
       const dbYuva = await Yuvalist.find(await recordsInManagerRegionQuery(manager));
-      res.status(200).json(dbYuva);
+      res.status(200).json(dbYuva.map(withEnGu));
     } else if (role === "STATE_MANAGER") {
       const manager = await findAccountByTokenId(id);
       const dbYuva = await Yuvalist.find(await recordsInManagerStateQuery(manager));
-      res.status(200).json(dbYuva);
+      res.status(200).json(dbYuva.map(withEnGu));
     } else if (role === "COUNTRY_MANAGER") {
       const manager = await findAccountByTokenId(id);
       const dbYuva = await Yuvalist.find(await recordsInManagerCountryQuery(manager));
-      res.status(200).json(dbYuva);
+      res.status(200).json(dbYuva.map(withEnGu));
     } else if (role === "SAMAJ_MANAGER") {
       const mangerSamaj = await User.findById(id);
       if (mangerSamaj?.localSamaj) {
         const dbYuva = await Yuvalist.find({
           localSamaj: { $eq: mangerSamaj?.localSamaj },
         });
-        res.status(200).json(dbYuva);
+        res.status(200).json(dbYuva.map(withEnGu));
       }
     } else if (role === "CITY_MANAGER") {
       const manager = await findAccountByTokenId(id);
       const dbYuva = await Yuvalist.find(await recordsInManagerCityQuery(manager));
-      res.status(200).json(dbYuva);
+      res.status(200).json(dbYuva.map(withEnGu));
     } else if (role === "DISTRICT_MANAGER") {
       const manager = await findAccountByTokenId(id);
       const dbYuva = await Yuvalist.find(await recordsInManagerDistrictQuery(manager));
-      res.status(200).json(dbYuva);
+      res.status(200).json(dbYuva.map(withEnGu));
     }
   }
 });
@@ -381,11 +439,11 @@ router.get("/list/:id", async (req, res) => {
     }
     const labels = await resolveYuvaLabels(dbYuva);
     if (String(req.user.role).toUpperCase() === "USER") {
-      const picked = pickYuvaFields(dbYuva, MEMBER_YUVA_KEYS);
+      const picked = pickYuvaFields(withEnGu(dbYuva), MEMBER_YUVA_KEYS);
       picked.labels = labels;
       return res.json(picked);
     }
-    const json = typeof dbYuva.toJSON === "function" ? dbYuva.toJSON() : dbYuva;
+    const json = withEnGu(dbYuva);
     json.labels = labels;
     res.json(json);
   } catch (e) {
@@ -402,9 +460,12 @@ router.get("/citylist", async (req, res) => {
 });
 
 router.post("/addYuvaList", async (req, res) => {
+  if (errorCheck(req, res)) {
+    return;
+  }
   const user = req.user;
   if (!(user && (isAdmin(user.role) || isLocationMasterReadOnly(user.role)))) {
-    return res.status(403).send({ message: "Only admin can add this." });
+    return res.status(403).json({ message: "Only admin can add this." });
   }
   const isBulk = Array.isArray(req.body?.yuvas);
   const items = isBulk ? req.body.yuvas : [req.body];
@@ -419,33 +480,42 @@ router.post("/addYuvaList", async (req, res) => {
         return res.status(constrained.status).json({ message: constrained.message });
       }
       const { email, ...record } = constrained.data || {};
+      const prepared = prepareYuvaRecord(record);
       docs.push({
-        ...record,
+        ...prepared,
         id: uuidv4().replace(/-/g, ""),
         active: true,
         createdAt: new Date(),
         updatedAt: null,
-        createdBy: req.user.id,
+        createdBy: user.id,
         updatedBy: null,
       });
     }
     if (isBulk) {
       const created = await Yuvalist.insertMany(docs);
-      await recordActivityMany(req, "create", "yuva", created);
-      return res.status(200).json({ data: created, count: created.length });
+      await dropStoredGu(created);
+      recordActivityMany(req, "create", "yuva", created).catch(() => {});
+      return res.status(200).json({ data: created.map(withEnGu), count: created.length });
     }
     const created = await Yuvalist.create(docs[0]);
-    await recordActivity({
+    await dropStoredGu([created]);
+    recordActivity({
       req,
       action: "create",
       entityType: "yuva",
       entity: created,
       next: created,
-    });
-    res.send(created);
+    }).catch(() => {});
+    const plain =
+      typeof created.toObject === "function"
+        ? created.toObject({ depopulate: true })
+        : created;
+    return res.status(200).json(withEnGu(plain));
   } catch (e) {
     console.error("add yuva failed", e);
-    res.status(500).json({ message: "Could not save Yuva." });
+    return res.status(500).json({
+      message: e?.message || String(e),
+    });
   }
 });
 
@@ -501,7 +571,7 @@ router.patch("/update/:id", async (req, res) => {
       return res.status(constrained.status).json({ message: constrained.message });
     }
     const previous = allowed.toObject ? allowed.toObject() : { ...allowed };
-    const payload = sanitizeUpdatePayload(constrained.data);
+    const payload = sanitizeUpdatePayload(prepareYuvaRecord(constrained.data));
     delete payload.email;
     delete previous.email;
     await Yuvalist.updateOne(filter, {
@@ -510,7 +580,7 @@ router.patch("/update/:id", async (req, res) => {
         updatedAt: new Date(),
         updatedBy: req?.user?.id,
       },
-      $unset: { email: "" },
+      $unset: { email: "", gu: "" },
     });
     await recordActivity({
       req,

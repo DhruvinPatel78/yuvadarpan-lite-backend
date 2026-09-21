@@ -49,7 +49,10 @@ const userSchema = new mongoose.Schema({
   district: String,
   state: String,
   country: String,
-  language: String,
+  language: {
+    type: String,
+    default: "gu",
+  },
   active: Boolean,
   allowed: Boolean,
   role: String,

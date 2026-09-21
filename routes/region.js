@@ -31,6 +31,7 @@ const { attachLinkedRoute } = require("../utils/linkedRecords");
 const { recordActivity, recordActivityMany } = require("../utils/activityLog");
 const { verifyToken, errorCheck, WRITE_METHODS } = require("../utils/auth");
 const { escapeRegex } = require("../utils/escapeRegex");
+const { prepareMasterName, nameContains } = require("../utils/masterName");
 
 router.use(verifyToken({ methods: WRITE_METHODS }));
 attachLinkedRoute(router, "region", errorCheck);
@@ -53,11 +54,7 @@ router.get("/list", async (req, res) => {
           state_id: { $in: state },
         }
       : {};
-  const Name = name
-    ? {
-        name: { $regex: new RegExp(escapeRegex(name), "i") },
-      }
-    : {};
+  const Name = nameContains(name, escapeRegex);
   const filter = {
     ...Country,
     ...State,
@@ -164,7 +161,7 @@ router.post("/add", async (req, res) => {
     data.country_id = countryId;
   }
   const dbRegion = await Region.create({
-    ...data,
+    ...prepareMasterName(data),
     id: crypto.randomUUID().replace(/-/g, ""),
     active: true,
     createdAt: new Date(),
@@ -233,7 +230,7 @@ router.patch("/update/:id", async (req, res) => {
     return res.status(403).json({ message: "You cannot do this." });
   }
   const { id } = req.params;
-  const payload = { ...req.body };
+  const payload = prepareMasterName({ ...req.body });
   let filter = idOrObjectIdFilter(id);
   if (isStateManager(req.user?.role)) {
     const manager = await findAccountByTokenId(req.user.id);
