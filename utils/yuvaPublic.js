@@ -8,6 +8,8 @@ const District = require("../models/district");
 const City = require("../models/city");
 const Samaj = require("../models/samaj");
 const { findByAnyId } = require("./childCount");
+const { nameText } = require("./masterName");
+const { withEnGu } = require("./yuvaGu");
 
 const nameOf = async (Model, id) => {
   if (!id) {
@@ -15,7 +17,7 @@ const nameOf = async (Model, id) => {
   }
   const rows = await findByAnyId(Model, String(id));
   const row = Array.isArray(rows) ? rows[0] : rows;
-  return row?.name || "";
+  return nameText(row);
 };
 
 const resolveYuvaLabels = async (yuva) => {
@@ -115,6 +117,7 @@ const pickYuvaFields = (yuva, keys) => {
     return null;
   }
   const json = typeof yuva.toJSON === "function" ? yuva.toJSON() : { ...yuva };
+  delete json.gu;
   const picked = {};
   keys.forEach((key) => {
     if (json[key] !== undefined) {
@@ -131,7 +134,7 @@ const getPublicYuvaById = async (id) => {
   if (!yuva) {
     return null;
   }
-  const json = pickYuvaFields(yuva, PUBLIC_YUVA_KEYS);
+  const json = pickYuvaFields(withEnGu(yuva), PUBLIC_YUVA_KEYS);
   json.labels = await resolveYuvaLabels(yuva);
   delete json.email;
   return json;

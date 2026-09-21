@@ -6,6 +6,7 @@ const { rejectLocationMasterWrite } = require("../utils/managerScope");
 const { attachLinkedRoute } = require("../utils/linkedRecords");
 const { verifyToken, errorCheck, requireAuth } = require("../utils/auth");
 const { escapeRegex } = require("../utils/escapeRegex");
+const { prepareMasterName, nameContains } = require("../utils/masterName");
 
 router.use(verifyToken());
 router.use(requireAuth);
@@ -16,11 +17,7 @@ router.get("/list", async (req, res) => {
   const limit = parseInt(req.query.limit, 10) || 10;
   const offset = (page - 1) * limit;
   const { name } = req.query;
-  const Name = name
-    ? {
-        name: { $regex: new RegExp(escapeRegex(name), "i") },
-      }
-    : {};
+  const Name = nameContains(name, escapeRegex);
   const records = await Gotra.find({ ...Name })
     .skip(offset)
     .limit(limit)
@@ -40,20 +37,24 @@ router.post("/add", async (req, res) => {
     return;
   }
   try {
-    const name = String(req.body?.name || "").trim();
-    if (!name) {
+    const data = prepareMasterName(req.body || {});
+    const nameEn = String(data.name?.en || "").trim();
+    if (!nameEn) {
       res.status(400).json({ message: "Gotra name is required." });
       return;
     }
     const existing = await Gotra.findOne({
-      name: { $regex: new RegExp(`^${escapeRegex(name)}$`, "i") },
+      $or: [
+        { "name.en": { $regex: new RegExp(`^${escapeRegex(nameEn)}$`, "i") } },
+        { name: { $regex: new RegExp(`^${escapeRegex(nameEn)}$`, "i") } },
+      ],
     });
     if (existing) {
       res.status(200).send(existing);
       return;
     }
     const dbGotra = await Gotra.create({
-      name,
+      ...data,
       id: crypto.randomUUID().replace(/-/g, ""),
       active: true,
       createdAt: new Date(),
@@ -85,7 +86,7 @@ router.get("/getInfo/:id", async (req, res) => {
 router.patch("/update/:id", async (req, res) => {
   if (!errorCheck(req, res) && !rejectLocationMasterWrite(req, res)) {
     const { id } = req.params;
-    const payload = sanitizeUpdatePayload({ ...req.body });
+    const payload = sanitizeUpdatePayload(prepareMasterName({ ...req.body }));
     await Gotra.updateOne(idOrObjectIdFilter(id), {
       $set: {
         ...payload,

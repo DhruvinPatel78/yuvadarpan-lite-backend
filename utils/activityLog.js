@@ -11,6 +11,7 @@ const Surname = require("../models/surname");
 const Gotra = require("../models/gotra");
 const { findAccountByTokenId } = require("./managerScope");
 const { idOrObjectIdFilter } = require("./childCount");
+const { nameText, pairText } = require("./masterName");
 
 const STAFF_ROLES = new Set([
   "ADMIN",
@@ -48,6 +49,7 @@ const FIELD_LABELS = {
   dob: "Date of birth",
   gender: "Gender",
   language: "Language",
+  gu: "Gujarati",
   role: "Role",
   active: "Active",
   allowed: "Allowed",
@@ -204,7 +206,7 @@ const lookupName = async (Model, value) => {
   if (!Model || emptyValue(value)) return null;
   try {
     const doc = await Model.findOne(idOrObjectIdFilter(String(value))).lean();
-    return doc?.name || doc?.label || null;
+    return nameText(doc) || doc?.label || null;
   } catch (e) {
     return null;
   }
@@ -234,7 +236,7 @@ const personLabel = async (doc) => {
   let last = doc.lastName || "";
   const surnameName = last ? await lookupName(Surname, last) : null;
   if (surnameName) last = surnameName;
-  return [doc.firstName, doc.fatherName, last]
+  return [pairText(doc.firstName), pairText(doc.fatherName), last]
     .filter(Boolean)
     .join(" ")
     .trim();
@@ -245,7 +247,7 @@ const getEntityLabel = async (entityType, doc) => {
   if (entityType === "user" || entityType === "yuva") {
     return personLabel(doc);
   }
-  return doc.name || doc.label || "";
+  return nameText(doc) || doc.label || "";
 };
 
 const safeSnapshot = (doc) => {

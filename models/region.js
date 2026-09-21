@@ -1,14 +1,12 @@
 const mongoose = require("mongoose");
+const { withMasterName, masterNameFields } = require("../utils/masterName");
 
 const regionSchema = new mongoose.Schema({
   id: {
     type: String,
     required: true,
   },
-  name: {
-    type: String,
-    required: true,
-  },
+  name: masterNameFields,
   country_id: {
     type: String,
     required: true,
@@ -32,6 +30,8 @@ const regionSchema = new mongoose.Schema({
         }
     }
 });
+
+withMasterName(regionSchema);
 
 const Region = mongoose.model("Region", regionSchema);
 

@@ -1,14 +1,12 @@
 const mongoose = require("mongoose");
+const { withMasterName, masterNameFields } = require("../utils/masterName");
 
 const nativeSchema = new mongoose.Schema({
   id: {
     type: String,
     required: true,
   },
-  name: {
-    type: String,
-    required: true,
-  },
+  name: masterNameFields,
   active: Boolean,
   createdAt: Date,
   updatedAt: Date,
@@ -28,6 +26,8 @@ const nativeSchema = new mongoose.Schema({
         }
     }
 });
+
+withMasterName(nativeSchema);
 
 const Native = mongoose.model("Native", nativeSchema);
 

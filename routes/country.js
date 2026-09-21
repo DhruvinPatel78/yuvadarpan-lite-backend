@@ -8,6 +8,7 @@ const { attachLinkedRoute } = require("../utils/linkedRecords");
 const { recordActivity, recordActivityMany } = require("../utils/activityLog");
 const { verifyToken, errorCheck, requireAuth } = require("../utils/auth");
 const { escapeRegex } = require("../utils/escapeRegex");
+const { prepareMasterName, nameContains } = require("../utils/masterName");
 
 router.use(verifyToken());
 router.use(requireAuth);
@@ -18,11 +19,7 @@ router.get("/list", async (req, res) => {
   const page = parseInt(req.query.page, 10) || 1;
   const limit = parseInt(req.query.limit, 10) || 10;
   const { name } = req.query;
-  const Name = name
-    ? {
-        name: { $regex: new RegExp(escapeRegex(name), "i") },
-      }
-    : {};
+  const Name = nameContains(name, escapeRegex);
   const offset = (page - 1) * limit;
   const Countries = await Country.find({ ...Name })
     .skip(offset)
@@ -48,7 +45,7 @@ router.post("/add", async (req, res) => {
   if (!errorCheck(req, res) && !rejectLocationMasterWrite(req, res)) {
     const data = req.body;
     const dbCountry = await Country.create({
-      ...data,
+      ...prepareMasterName(data),
       id: crypto.randomUUID().replace(/-/g, ""),
       active: true,
       createdAt: new Date(),
@@ -88,7 +85,7 @@ router.get("/getInfo/:id", async (req, res) => {
 router.patch("/update/:id", async (req, res) => {
   if (!errorCheck(req, res) && !rejectLocationMasterWrite(req, res)) {
     const { id } = req.params;
-    const payload = { ...req.body };
+    const payload = prepareMasterName({ ...req.body });
     const filter = idOrObjectIdFilter(id);
     const previous = await Country.findOne(filter).lean();
     await Country.updateOne(
