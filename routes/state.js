@@ -9,6 +9,7 @@ const {
   findByAnyId,
   idOrObjectIdFilter,
   idsFilter,
+  parentIdFilter,
   sanitizeUpdatePayload,
 } = require("../utils/childCount");
 const {
@@ -29,6 +30,7 @@ const { recordActivity, recordActivityMany } = require("../utils/activityLog");
 const { verifyToken, errorCheck, requireAuth } = require("../utils/auth");
 const { escapeRegex } = require("../utils/escapeRegex");
 const { prepareMasterName, nameContains } = require("../utils/masterName");
+const { mergeAnd } = require("../utils/caseInsensitiveSearch");
 
 router.use(verifyToken());
 router.use(requireAuth);
@@ -39,18 +41,11 @@ router.get("/list", async (req, res) => {
   const page = parseInt(req.query.page, 10) || 1;
   const limit = parseInt(req.query.limit, 10) || 10;
   const offset = (page - 1) * limit;
-  const { country = [], name } = req.query;
-  const Country =
-    country?.length > 0
-      ? {
-          country_id: { $in: country },
-        }
-      : {};
-  const Name = nameContains(name, escapeRegex);
-  const filter = {
-    ...Country,
-    ...Name,
-  };
+  const { country, name } = req.query;
+  const filter = mergeAnd(
+    await parentIdFilter("country_id", country, Country),
+    nameContains(name)
+  );
   const tokenUser = getTokenPayload(req);
   if (isCountryManager(tokenUser?.role) && isOwnCountryQuery(req.query)) {
     const manager = await findAccountByTokenId(tokenUser?.id);
@@ -71,14 +66,9 @@ router.get("/list", async (req, res) => {
   res.status(200).json({ total: totalItems, page, totalPages, data });
 });
 router.get("/get-all-list", async (req, res) => {
-  const { data = [] } = req.query;
-  const Country =
-    data?.length > 0
-      ? {
-          country_id: { $in: data },
-        }
-      : {};
-  const States = await State.find(Country);
+  const States = await State.find(
+    await parentIdFilter("country_id", req.query.data, Country)
+  );
   res.status(200).json(States);
 });
 

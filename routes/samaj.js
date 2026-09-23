@@ -3,7 +3,10 @@ const router = express.Router();
 const Samaj = require("../models/samaj");
 const City = require("../models/city");
 const Region = require("../models/region");
-const { findChildrenByParent, findByAnyId, idOrObjectIdFilter, idsFilter, sanitizeUpdatePayload } = require("../utils/childCount");
+const State = require("../models/state");
+const Country = require("../models/country");
+const District = require("../models/district");
+const { findChildrenByParent, findByAnyId, idOrObjectIdFilter, idsFilter, parentIdFilter, sanitizeUpdatePayload } = require("../utils/childCount");
 const {
   rejectSamajManagerWrite,
   isCityManager,
@@ -34,6 +37,7 @@ const { recordActivity, recordActivityMany } = require("../utils/activityLog");
 const { verifyToken, errorCheck, WRITE_METHODS } = require("../utils/auth");
 const { escapeRegex } = require("../utils/escapeRegex");
 const { prepareMasterName, nameContains } = require("../utils/masterName");
+const { mergeAnd } = require("../utils/caseInsensitiveSearch");
 
 router.use(verifyToken({ methods: WRITE_METHODS }));
 attachLinkedRoute(router, "samaj", errorCheck);
@@ -43,53 +47,15 @@ router.get("/list", async (req, res) => {
   const page = parseInt(req.query.page, 10) || 1;
   const limit = parseInt(req.query.limit, 10) || 10;
   const offset = (page - 1) * limit;
-  const {
-    country = [],
-    state = [],
-    region = [],
-    district = [],
-    city = [],
-    name,
-  } = req.query;
-  const Country =
-    country?.length > 0
-      ? {
-          country_id: { $in: country },
-        }
-      : {};
-  const State =
-    state?.length > 0
-      ? {
-          state_id: { $in: state },
-        }
-      : {};
-  const Region =
-    region?.length > 0
-      ? {
-          region_id: { $in: region },
-        }
-      : {};
-  const District =
-    district?.length > 0
-      ? {
-          district_id: { $in: district },
-        }
-      : {};
-  const CityFilter =
-    city?.length > 0
-      ? {
-          city_id: { $in: city },
-        }
-      : {};
-  const Name = nameContains(name, escapeRegex);
-  const filter = {
-    ...Country,
-    ...State,
-    ...Region,
-    ...District,
-    ...CityFilter,
-    ...Name,
-  };
+  const { country, state, region, district, city, name } = req.query;
+  const filter = mergeAnd(
+    await parentIdFilter("country_id", country, Country),
+    await parentIdFilter("state_id", state, State),
+    await parentIdFilter("region_id", region, Region),
+    await parentIdFilter("district_id", district, District),
+    await parentIdFilter("city_id", city, City),
+    nameContains(name)
+  );
   const tokenUser = getTokenPayload(req);
   if (isCityManager(tokenUser?.role) && isOwnCityQuery(req.query)) {
     const manager = await findAccountByTokenId(tokenUser?.id);
@@ -126,14 +92,9 @@ router.get("/list", async (req, res) => {
   res.status(200).json({ total: totalItems, page, totalPages, data: Samajs });
 });
 router.get("/get-all-list", async (req, res) => {
-  const { data = [] } = req.query;
-  const Data =
-    data?.length > 0
-      ? {
-          region_id: { $in: data },
-        }
-      : {};
-  const Samajs = await Samaj.find(Data);
+  const Samajs = await Samaj.find(
+    await parentIdFilter("region_id", req.query.data, Region)
+  );
   res.status(200).json(Samajs);
 });
 

@@ -2,6 +2,7 @@ const express = require("express");
 const router = express.Router();
 const Region = require("../models/region");
 const State = require("../models/state");
+const Country = require("../models/country");
 const District = require("../models/district");
 const {
   attachChildCounts,
@@ -9,6 +10,7 @@ const {
   findByAnyId,
   idOrObjectIdFilter,
   idsFilter,
+  parentIdFilter,
   sanitizeUpdatePayload,
 } = require("../utils/childCount");
 const {
@@ -32,6 +34,7 @@ const { recordActivity, recordActivityMany } = require("../utils/activityLog");
 const { verifyToken, errorCheck, WRITE_METHODS } = require("../utils/auth");
 const { escapeRegex } = require("../utils/escapeRegex");
 const { prepareMasterName, nameContains } = require("../utils/masterName");
+const { mergeAnd } = require("../utils/caseInsensitiveSearch");
 
 router.use(verifyToken({ methods: WRITE_METHODS }));
 attachLinkedRoute(router, "region", errorCheck);
@@ -41,25 +44,12 @@ router.get("/list", async (req, res) => {
   const page = parseInt(req.query.page, 10) || 1;
   const limit = parseInt(req.query.limit, 10) || 10;
   const offset = (page - 1) * limit;
-  const { country = [], state = [], name } = req.query;
-  const Country =
-    country?.length > 0
-      ? {
-          country_id: { $in: country },
-        }
-      : {};
-  const State =
-    state?.length > 0
-      ? {
-          state_id: { $in: state },
-        }
-      : {};
-  const Name = nameContains(name, escapeRegex);
-  const filter = {
-    ...Country,
-    ...State,
-    ...Name,
-  };
+  const { country, state, name } = req.query;
+  const filter = mergeAnd(
+    await parentIdFilter("country_id", country, Country),
+    await parentIdFilter("state_id", state, State),
+    nameContains(name)
+  );
   const tokenUser = getTokenPayload(req);
   if (isStateManager(tokenUser?.role) && isOwnStateQuery(req.query)) {
     const manager = await findAccountByTokenId(tokenUser?.id);
@@ -85,14 +75,9 @@ router.get("/list", async (req, res) => {
   res.status(200).json({ total: totalItems, page, totalPages, data });
 });
 router.get("/get-all-list", async (req, res) => {
-  const { data = [] } = req.query;
-  const State =
-    data?.length > 0
-      ? {
-          state_id: { $in: data },
-        }
-      : {};
-  const Regions = await Region.find(State);
+  const Regions = await Region.find(
+    await parentIdFilter("state_id", req.query.data, State)
+  );
   res.status(200).json(Regions);
 });
 

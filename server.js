@@ -57,6 +57,7 @@ const PORT = process.env.PORT;
 
 console.log("port =>", PORT);
 
+mongoose.set("strictQuery", false);
 mongoose.connect(process.env.MONGO_URL).then(() => {
   console.log("Connected to MongoDB");
 }).catch((err) => {
