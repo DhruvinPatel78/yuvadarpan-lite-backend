@@ -134,6 +134,18 @@ const withEnGu = (doc) => {
 
 const prepareYuvaRecord = (record = {}) => {
   const next = applyLangPairs(record);
+  TEXT_KEYS.forEach((key) => {
+    if (
+      !(key in record) &&
+      !(`${key}En` in record) &&
+      !(`${key}Gu` in record)
+    ) {
+      delete next[key];
+    }
+  });
+  if (!("other" in record) && !("otherEn" in record) && !("otherGu" in record)) {
+    delete next.other;
+  }
   if (next.contactInfo) {
     next.contactInfo = { ...next.contactInfo };
     const digits = String(next.contactInfo.phone ?? "").replace(/\D/g, "");
