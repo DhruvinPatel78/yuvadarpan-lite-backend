@@ -5,7 +5,7 @@ const User = require("../models/user");
 const { v4: uuidv4 } = require('uuid');
 const { idsFilter, idOrObjectIdFilter, sanitizeUpdatePayload, findByAnyId } = require("../utils/childCount");
 const { deleteYuvaImages } = require("../utils/s3");
-const { getPublicYuvaById, pickYuvaFields, resolveYuvaLabels, MEMBER_YUVA_SELECT, MEMBER_YUVA_KEYS } = require("../utils/yuvaPublic");
+const { getPublicYuvaById, pickYuvaFields, resolveYuvaLabels, MEMBER_YUVA_SELECT, MEMBER_PROFILE_KEYS } = require("../utils/yuvaPublic");
 const { verifyToken, errorCheck } = require("../utils/auth");
 const { escapeRegex } = require("../utils/escapeRegex");
 const {
@@ -439,7 +439,7 @@ router.get("/list/:id", async (req, res) => {
     }
     const labels = await resolveYuvaLabels(dbYuva);
     if (String(req.user.role).toUpperCase() === "USER") {
-      const picked = pickYuvaFields(withEnGu(dbYuva), MEMBER_YUVA_KEYS);
+      const picked = pickYuvaFields(withEnGu(dbYuva), MEMBER_PROFILE_KEYS);
       picked.labels = labels;
       return res.json(picked);
     }
