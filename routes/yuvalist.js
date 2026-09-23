@@ -55,6 +55,7 @@ router.get("/public/:id", async (req, res) => {
     }
     res.status(200).json(yuva);
   } catch (e) {
+    console.error("yuva public get by id failed", e);
     res.status(500).json({ message: "Could not load data." });
   }
 });

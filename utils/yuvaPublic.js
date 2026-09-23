@@ -13,11 +13,14 @@ const { withEnGu } = require("./yuvaGu");
 
 const nameOf = async (Model, id) => {
   if (!id) {
-    return "";
+    return { en: "", gu: "" };
   }
   const rows = await findByAnyId(Model, String(id));
   const row = Array.isArray(rows) ? rows[0] : rows;
-  return nameText(row);
+  return {
+    en: nameText(row, "en"),
+    gu: nameText(row, "gu"),
+  };
 };
 
 const resolveYuvaLabels = async (yuva) => {
@@ -74,22 +77,6 @@ const sanitizeYuvaId = (value) => {
   return raw.split(/[\s/?&#]/)[0];
 };
 
-const PUBLIC_YUVA_KEYS = [
-  "id",
-  "firstName",
-  "lastName",
-  "gender",
-  "dob",
-  "city",
-  "state",
-  "region",
-  "district",
-  "localSamaj",
-  "native",
-  "mamaInfo",
-  "martialStatus",
-];
-
 const MEMBER_YUVA_KEYS = [
   "id",
   "firstName",
@@ -135,6 +122,10 @@ const MEMBER_PROFILE_KEYS = [
   "manglik",
 ];
 
+// Unauthenticated GET /public/:id allowlist. Currently matches GET /list/:id.
+// Remove keys from this list later to hide fields without adding auth.
+const PUBLIC_PROFILE_KEYS = [...MEMBER_PROFILE_KEYS];
+
 const pickYuvaFields = (yuva, keys) => {
   if (!yuva) {
     return null;
@@ -157,7 +148,7 @@ const getPublicYuvaById = async (id) => {
   if (!yuva) {
     return null;
   }
-  const json = pickYuvaFields(withEnGu(yuva), PUBLIC_YUVA_KEYS);
+  const json = pickYuvaFields(withEnGu(yuva), PUBLIC_PROFILE_KEYS);
   json.labels = await resolveYuvaLabels(yuva);
   delete json.email;
   return json;
@@ -170,4 +161,5 @@ module.exports = {
   MEMBER_YUVA_KEYS,
   MEMBER_YUVA_SELECT,
   MEMBER_PROFILE_KEYS,
+  PUBLIC_PROFILE_KEYS,
 };
