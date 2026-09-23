@@ -544,6 +544,55 @@ router.delete("/:id", async (req, res) => {
   }
 });
 
+const pickProfile = (value) => {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+  const url = String(value.url || "").trim();
+  const name = String(value.name || "").trim();
+  const awsId = String(value.awsId || "").trim();
+  if (!url && !name && !awsId) {
+    return null;
+  }
+  return { url, name, awsId };
+};
+
+router.patch("/profile/:id", async (req, res) => {
+  if (!errorCheck(req, res)) {
+    const { id } = req.params;
+    const scope = await getYuvaWriteScopeFilter(req.user.role, req.user.id);
+    const filter = mergeYuvaWriteFilter(idOrObjectIdFilter(id), scope);
+    const allowed = await Yuvalist.findOne(filter);
+    if (!allowed) {
+      return res.status(isAdmin(req.user.role) ? 404 : 403).json({
+        message: isAdmin(req.user.role)
+          ? "Profile not found."
+          : "You cannot do this.",
+      });
+    }
+    const profile = pickProfile(req.body?.profile || req.body);
+    if (!profile) {
+      return res.status(400).json({ message: "Profile photo is required." });
+    }
+    const previous = allowed.toObject ? allowed.toObject() : { ...allowed };
+    await Yuvalist.updateOne(filter, {
+      $set: {
+        profile,
+        updatedAt: new Date(),
+        updatedBy: req?.user?.id,
+      },
+    });
+    await recordActivity({
+      req,
+      action: "update",
+      entityType: "yuva",
+      previous,
+      next: { ...previous, profile },
+    });
+    res.status(200).json({ message: "Updated Successfully", data: { profile } });
+  }
+});
+
 router.patch("/update/:id", async (req, res) => {
   if (!errorCheck(req, res)) {
     const { id } = req.params;
