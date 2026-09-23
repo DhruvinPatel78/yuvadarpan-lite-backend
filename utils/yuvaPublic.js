@@ -25,6 +25,8 @@ const resolveYuvaLabels = async (yuva) => {
     lastName,
     native,
     mamaNative,
+    mamaLastName,
+    contactLastName,
     country,
     state,
     region,
@@ -35,6 +37,8 @@ const resolveYuvaLabels = async (yuva) => {
     nameOf(Surname, yuva.lastName),
     nameOf(Native, yuva.native),
     nameOf(Native, yuva.mamaInfo?.native),
+    nameOf(Surname, yuva.mamaInfo?.lastName),
+    nameOf(Surname, yuva.contactInfo?.lastName),
     nameOf(Country, yuva.country),
     nameOf(State, yuva.state),
     nameOf(Region, yuva.region),
@@ -46,6 +50,8 @@ const resolveYuvaLabels = async (yuva) => {
     lastName,
     native,
     mamaNative,
+    mamaLastName,
+    contactLastName,
     country,
     state,
     region,
@@ -112,6 +118,23 @@ const MEMBER_YUVA_KEYS = [
 
 const MEMBER_YUVA_SELECT = MEMBER_YUVA_KEYS.join(" ");
 
+const MEMBER_PROFILE_KEYS = [
+  ...MEMBER_YUVA_KEYS,
+  "familyId",
+  "pob",
+  "YSKno",
+  "activity",
+  "country",
+  "firmAddress",
+  "address",
+  "contactInfo",
+  "handicap",
+  "handicapDetails",
+  "other",
+  "abroadStudy",
+  "manglik",
+];
+
 const pickYuvaFields = (yuva, keys) => {
   if (!yuva) {
     return null;
@@ -146,4 +169,5 @@ module.exports = {
   resolveYuvaLabels,
   MEMBER_YUVA_KEYS,
   MEMBER_YUVA_SELECT,
+  MEMBER_PROFILE_KEYS,
 };
