@@ -113,14 +113,20 @@ const omitGu = (value) => {
   }
   return JSON.parse(JSON.stringify(value), (key, nested) => {
     if (
-      key === "gu" &&
-      nested &&
-      typeof nested === "object" &&
-      !Array.isArray(nested)
+      key !== "gu" ||
+      !nested ||
+      typeof nested !== "object" ||
+      Array.isArray(nested)
     ) {
-      return undefined;
+      return nested;
     }
-    return nested;
+    const isLegacyYuvaGu =
+      "firstName" in nested ||
+      "fatherName" in nested ||
+      "motherName" in nested ||
+      "mamaInfo" in nested ||
+      "contactInfo" in nested;
+    return isLegacyYuvaGu ? undefined : nested;
   });
 };
 
