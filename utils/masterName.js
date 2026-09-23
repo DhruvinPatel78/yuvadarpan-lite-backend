@@ -83,15 +83,9 @@ const withMasterName = (schema) => {
   });
 };
 
-const nameContains = (value, escapeRegex) => {
-  if (value == null || String(value).trim() === "") {
-    return {};
-  }
-  const rx = { $regex: escapeRegex(String(value).trim()), $options: "i" };
-  return {
-    $or: [{ "name.en": rx }, { "name.gu": rx }, { name: rx }],
-  };
-};
+const { containsAny } = require("./caseInsensitiveSearch");
+
+const nameContains = (value) => containsAny(value, ["name"]);
 
 module.exports = {
   asName,
