@@ -56,6 +56,45 @@ const idsFilter = (ids = []) => {
   };
 };
 
+const asQueryList = (value) => {
+  if (value == null || value === "") {
+    return [];
+  }
+  const list = Array.isArray(value) ? value : [value];
+  return [
+    ...new Set(
+      list
+        .map((item) => String(item ?? "").trim())
+        .filter((item) => item && item !== "all" && item !== "undefined")
+    ),
+  ];
+};
+
+const parentIdFilter = async (field, raw, Model) => {
+  const ids = asQueryList(raw);
+  if (!ids.length) {
+    return {};
+  }
+  const keys = new Set(ids);
+  if (Model) {
+    const docs = await Promise.all(
+      ids.map((id) => Model.findOne(idOrObjectIdFilter(id)).select("id").lean())
+    );
+    docs.forEach((doc) => {
+      if (!doc) {
+        return;
+      }
+      if (doc.id) {
+        keys.add(String(doc.id));
+      }
+      if (doc._id) {
+        keys.add(String(doc._id));
+      }
+    });
+  }
+  return { [field]: { $in: [...keys] } };
+};
+
 const sanitizeUpdatePayload = (payload = {}) => {
   const { id, _id, __v, ...rest } = payload;
   return rest;
@@ -67,5 +106,7 @@ module.exports = {
   findByAnyId,
   idOrObjectIdFilter,
   idsFilter,
+  asQueryList,
+  parentIdFilter,
   sanitizeUpdatePayload,
 };

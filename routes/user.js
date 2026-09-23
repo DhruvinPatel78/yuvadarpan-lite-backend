@@ -12,6 +12,8 @@ const { sendNotification } = require("../utils/fcm");
 const { notifyAccountEvent, notifyStatusChange } = require("../utils/accountMail");
 const appMessages = require("../utils/appMessages");
 const notification = require("../data/locale/notifications.json");
+const { escapeRegex } = require("../utils/escapeRegex");
+const { containsAny, mergeAnd } = require("../utils/caseInsensitiveSearch");
 const { idOrObjectIdFilter } = require("../utils/childCount");
 const {
   findAccountByTokenId,
@@ -69,6 +71,39 @@ const errorCheck = (req, res) => {
   } else {
     return false;
   }
+};
+
+const asQueryList = (value) => {
+  if (value == null || value === "") {
+    return [];
+  }
+  const list = Array.isArray(value) ? value : [value];
+  return list
+    .map((item) => String(item ?? "").trim())
+    .filter((item) => item && item !== "all");
+};
+
+const textContains = (value, fields = []) => containsAny(value, fields);
+
+const idContains = (field, value) => containsAny(value, [field]);
+
+const genderFilter = (value) => {
+  const raw = String(value ?? "").trim();
+  if (!raw) {
+    return {};
+  }
+  const lower = raw.toLowerCase();
+  const aliases =
+    lower === "male" || lower === "પુરુષ"
+      ? ["male", "Male", "પુરુષ"]
+      : lower === "female" || lower === "સ્ત્રી"
+        ? ["female", "Female", "સ્ત્રી"]
+        : [raw];
+  return {
+    $or: [...new Set(aliases)].map((item) => ({
+      gender: new RegExp(`^${escapeRegex(item)}$`, "i"),
+    })),
+  };
 };
 
 const resetAttempts = new Map();
@@ -149,62 +184,45 @@ router.get("/list", async (req, res) => {
       return res.status(403).json({ message: appMessages.notAllowed });
     }
     const { id, role } = req.user;
+    const lastName = asQueryList(req.query.lastName);
+    const region = asQueryList(req.query.region);
+    const samaj = asQueryList(req.query.samaj);
+    const roles = asQueryList(req.query.roles);
+    const state = asQueryList(req.query.state);
     const {
-      lastName = [],
-      state = [],
-      region = [],
-      samaj = [],
       familyId,
       firstName,
       mobile,
       email,
       gender,
-      roles = [],
     } = req.query;
     const page = parseInt(req.query.page, 10) || 1;
     const limit = parseInt(req.query.limit, 10) || 10;
     const offset = (page - 1) * limit;
     const Roles =
-      roles?.length > 0
+      roles.length > 0
         ? {
             role: { $in: roles },
           }
         : {};
     const LastName =
-      lastName?.length > 0
+      lastName.length > 0
         ? {
             lastName: { $in: lastName },
           }
         : {};
-    const FamilyId = familyId
-      ? {
-          familyId: { $eq: familyId },
-        }
-      : {};
-    const FirstName = firstName
-      ? {
-          firstName: { $eq: firstName },
-        }
-      : {};
-    const Mobile = mobile
-      ? {
-          mobile: { $eq: mobile },
-        }
-      : {};
-    const Email = email
-      ? {
-          email: { $eq: email },
-        }
-      : {};
-    const Gender = gender
-      ? {
-          gender: { $eq: gender },
-        }
-      : {};
+    const FamilyId = idContains("familyId", familyId);
+    const FirstName = textContains(firstName, ["firstName", "middleName"]);
+    const Mobile = textContains(mobile, ["mobile"]);
+    const Email = textContains(email, ["email"]);
+    const Gender = genderFilter(gender);
 
-    const RegionData = await Region.findOne({
-      state_id: { $in: state },
-    });
+    const RegionData =
+      state.length > 0
+        ? await Region.findOne({
+            state_id: { $in: state },
+          })
+        : null;
     const State = RegionData
       ? {
           region: { $eq: RegionData?.id },
@@ -222,33 +240,35 @@ router.get("/list", async (req, res) => {
             localSamaj: { $in: samaj },
           }
         : {};
-    const filterSearch = {
-      ...LastName,
-      ...State,
-      ...CurrentRegion,
-      ...CurrentSamaj,
-      ...FamilyId,
-      ...FirstName,
-      ...Mobile,
-      ...Gender,
-      ...Email,
-      ...Roles,
-    };
-    const query = { ...filterSearch };
+    const filterSearch = mergeAnd(
+      LastName,
+      State,
+      CurrentRegion,
+      CurrentSamaj,
+      FamilyId,
+      FirstName,
+      Mobile,
+      Gender,
+      Email,
+      Roles
+    );
+    let query = filterSearch;
     if (role !== "ADMIN") {
       const manager = await findAccountByTokenId(id);
       if (role === "SAMAJ_MANAGER") {
-        query.localSamaj = { $in: await samajValueKeys(manager?.localSamaj) };
+        query = mergeAnd(query, {
+          localSamaj: { $in: await samajValueKeys(manager?.localSamaj) },
+        });
       } else if (role === "CITY_MANAGER") {
-        Object.assign(query, await usersInManagerCityQuery(manager));
+        query = mergeAnd(query, await usersInManagerCityQuery(manager));
       } else if (role === "DISTRICT_MANAGER") {
-        Object.assign(query, await usersInManagerDistrictQuery(manager));
+        query = mergeAnd(query, await usersInManagerDistrictQuery(manager));
       } else if (role === "REGION_MANAGER") {
-        Object.assign(query, await usersInManagerRegionQuery(manager));
+        query = mergeAnd(query, await usersInManagerRegionQuery(manager));
       } else if (role === "STATE_MANAGER") {
-        Object.assign(query, await usersInManagerStateQuery(manager));
+        query = mergeAnd(query, await usersInManagerStateQuery(manager));
       } else if (role === "COUNTRY_MANAGER") {
-        Object.assign(query, await usersInManagerCountryQuery(manager));
+        query = mergeAnd(query, await usersInManagerCountryQuery(manager));
       }
     }
     const users = await User.find(query)
@@ -269,62 +289,45 @@ router.get("/requests", async (req, res) => {
       return res.status(403).json({ message: appMessages.notAllowed });
     }
     const { id, role } = req.user;
+    const lastName = asQueryList(req.query.lastName);
+    const region = asQueryList(req.query.region);
+    const samaj = asQueryList(req.query.samaj);
+    const roles = asQueryList(req.query.roles);
+    const state = asQueryList(req.query.state);
     const {
-      lastName = [],
-      state = [],
-      region = [],
-      samaj = [],
       familyId,
       firstName,
       mobile,
       email,
       gender,
-      roles = [],
     } = req.query;
     const page = parseInt(req.query.page, 10) || 1;
     const limit = parseInt(req.query.limit, 10) || 10;
     const offset = (page - 1) * limit;
     const Roles =
-      roles?.length > 0
+      roles.length > 0
         ? {
             role: { $in: roles },
           }
         : {};
     const LastName =
-      lastName?.length > 0
+      lastName.length > 0
         ? {
             lastName: { $in: lastName },
           }
         : {};
-    const FamilyId = familyId
-      ? {
-          familyId: { $eq: familyId },
-        }
-      : {};
-    const FirstName = firstName
-      ? {
-          firstName: { $eq: firstName },
-        }
-      : {};
-    const Mobile = mobile
-      ? {
-          mobile: { $eq: mobile },
-        }
-      : {};
-    const Email = email
-      ? {
-          email: { $eq: email },
-        }
-      : {};
-    const Gender = gender
-      ? {
-          gender: { $eq: gender },
-        }
-      : {};
+    const FamilyId = idContains("familyId", familyId);
+    const FirstName = textContains(firstName, ["firstName", "middleName"]);
+    const Mobile = textContains(mobile, ["mobile"]);
+    const Email = textContains(email, ["email"]);
+    const Gender = genderFilter(gender);
 
-    const RegionData = await Region.findOne({
-      state_id: { $in: state },
-    });
+    const RegionData =
+      state.length > 0
+        ? await Region.findOne({
+            state_id: { $in: state },
+          })
+        : null;
     const State = RegionData
       ? {
           region: { $eq: RegionData?.id },
@@ -342,23 +345,23 @@ router.get("/requests", async (req, res) => {
             localSamaj: { $in: samaj },
           }
         : {};
-    const filterSearch = {
-      ...LastName,
-      ...State,
-      ...CurrentRegion,
-      ...CurrentSamaj,
-      ...FamilyId,
-      ...FirstName,
-      ...Mobile,
-      ...Gender,
-      ...Email,
-      ...Roles,
-    };
-    const pendingQuery = {
-      allowed: { $eq: false },
-      $or: [{ active: true }, { updatedAt: null }],
-      ...filterSearch,
-    };
+    const filterSearch = mergeAnd(
+      LastName,
+      State,
+      CurrentRegion,
+      CurrentSamaj,
+      FamilyId,
+      FirstName,
+      Mobile,
+      Gender,
+      Email,
+      Roles
+    );
+    const pendingQuery = mergeAnd(
+      { allowed: { $eq: false } },
+      { $or: [{ active: true }, { updatedAt: null }] },
+      filterSearch
+    );
     if (role === "ADMIN") {
       const users = await User.find(pendingQuery)
         .sort({ id: -1 })
@@ -372,10 +375,10 @@ router.get("/requests", async (req, res) => {
         .json({ total: totalItems, page, totalPages, data: users });
     } else if (role === "REGION_MANAGER") {
       const manager = await findAccountByTokenId(id);
-      const managerPendingQuery = {
-        ...pendingQuery,
-        ...(await usersInManagerRegionQuery(manager)),
-      };
+      const managerPendingQuery = mergeAnd(
+        pendingQuery,
+        await usersInManagerRegionQuery(manager)
+      );
       const MangerUsers = await User.find(managerPendingQuery)
         .sort({ id: -1 })
         .skip(offset)
@@ -391,10 +394,10 @@ router.get("/requests", async (req, res) => {
       });
     } else if (role === "STATE_MANAGER") {
       const manager = await findAccountByTokenId(id);
-      const managerPendingQuery = {
-        ...pendingQuery,
-        ...(await usersInManagerStateQuery(manager)),
-      };
+      const managerPendingQuery = mergeAnd(
+        pendingQuery,
+        await usersInManagerStateQuery(manager)
+      );
       const MangerUsers = await User.find(managerPendingQuery)
         .sort({ id: -1 })
         .skip(offset)
@@ -410,10 +413,10 @@ router.get("/requests", async (req, res) => {
       });
     } else if (role === "COUNTRY_MANAGER") {
       const manager = await findAccountByTokenId(id);
-      const managerPendingQuery = {
-        ...pendingQuery,
-        ...(await usersInManagerCountryQuery(manager)),
-      };
+      const managerPendingQuery = mergeAnd(
+        pendingQuery,
+        await usersInManagerCountryQuery(manager)
+      );
       const MangerUsers = await User.find(managerPendingQuery)
         .sort({ id: -1 })
         .skip(offset)
@@ -430,10 +433,9 @@ router.get("/requests", async (req, res) => {
     } else if (role === "SAMAJ_MANAGER") {
       const mangerSamaj = await findAccountByTokenId(id);
       const samajKeys = await samajValueKeys(mangerSamaj?.localSamaj);
-      const managerPendingQuery = {
-        ...pendingQuery,
+      const managerPendingQuery = mergeAnd(pendingQuery, {
         localSamaj: { $in: samajKeys },
-      };
+      });
       const MangerUsers = await User.find(managerPendingQuery)
         .sort({ id: -1 })
         .skip(offset)
@@ -449,10 +451,10 @@ router.get("/requests", async (req, res) => {
       });
     } else if (role === "CITY_MANAGER") {
       const manager = await findAccountByTokenId(id);
-      const managerPendingQuery = {
-        ...pendingQuery,
-        ...(await usersInManagerCityQuery(manager)),
-      };
+      const managerPendingQuery = mergeAnd(
+        pendingQuery,
+        await usersInManagerCityQuery(manager)
+      );
       const MangerUsers = await User.find(managerPendingQuery)
         .sort({ id: -1 })
         .skip(offset)
@@ -468,10 +470,10 @@ router.get("/requests", async (req, res) => {
       });
     } else if (role === "DISTRICT_MANAGER") {
       const manager = await findAccountByTokenId(id);
-      const managerPendingQuery = {
-        ...pendingQuery,
-        ...(await usersInManagerDistrictQuery(manager)),
-      };
+      const managerPendingQuery = mergeAnd(
+        pendingQuery,
+        await usersInManagerDistrictQuery(manager)
+      );
       const MangerUsers = await User.find(managerPendingQuery)
         .sort({ id: -1 })
         .skip(offset)

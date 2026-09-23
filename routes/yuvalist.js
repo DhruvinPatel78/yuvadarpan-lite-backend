@@ -8,6 +8,7 @@ const { deleteYuvaImages } = require("../utils/s3");
 const { getPublicYuvaById, pickYuvaFields, resolveYuvaLabels, MEMBER_YUVA_SELECT, MEMBER_PROFILE_KEYS } = require("../utils/yuvaPublic");
 const { verifyToken, errorCheck } = require("../utils/auth");
 const { escapeRegex } = require("../utils/escapeRegex");
+const { containsAny } = require("../utils/caseInsensitiveSearch");
 const {
   findAccountByTokenId,
   samajValueKeys,
@@ -104,28 +105,29 @@ const dobRangeForAge = (minAge, maxAge) => {
 };
 
 const containsClause = (field, value) => {
-  if (value == null || String(value).trim() === "") {
-    return null;
-  }
-  return {
-    [field]: { $regex: escapeRegex(String(value).trim()), $options: "i" },
-  };
+  const clause = containsAny(value, [field]);
+  return Object.keys(clause).length ? clause : null;
 };
 
 const bilingualContains = (field, value) => {
-  if (value == null || String(value).trim() === "") {
-    return null;
-  }
-  const rx = { $regex: escapeRegex(String(value).trim()), $options: "i" };
-  return {
-    $or: [
-      { [`${field}.en`]: rx },
-      { [`${field}.gu`]: rx },
-      { [field]: rx },
-      { [`${field}En`]: rx },
-      { [`${field}Gu`]: rx },
-    ],
-  };
+  const clause = containsAny(value, [field]);
+  return Object.keys(clause).length ? clause : null;
+};
+
+const CHOICE_ALIASES = {
+  gender: {
+    male: ["male", "Male", "પુરુષ"],
+    female: ["female", "Female", "સ્ત્રી"],
+  },
+  martialStatus: {
+    divorce: ["divorce", "Divorce", "છૂટાછેડા"],
+    engaged: ["engaged", "Engaged", "વગ્દાન"],
+    married: ["married", "Married", "પરણિત"],
+    seprated: ["seprated", "separated", "Separated", "અલગ થયેલા"],
+    single: ["single", "Single", "અપરિણીત"],
+    widow: ["widow", "Widow", "વિધવા"],
+    widower: ["widower", "Widower", "વિધુર"],
+  },
 };
 
 const exactAnyClause = (field, values) => {
@@ -133,8 +135,17 @@ const exactAnyClause = (field, values) => {
   if (!list.length) {
     return null;
   }
+  const aliases = CHOICE_ALIASES[field] || {};
+  const expanded = [
+    ...new Set(
+      list.flatMap((item) => {
+        const key = String(item).trim();
+        return aliases[key.toLowerCase()] || [key];
+      })
+    ),
+  ];
   return {
-    $or: list.flatMap((item) => {
+    $or: expanded.flatMap((item) => {
       const rx = {
         $regex: `^${escapeRegex(String(item).trim())}$`,
         $options: "i",
@@ -233,47 +244,25 @@ const buildYuvaListFilter = (query = {}) => {
   }
   const search = String(query.search || query.q || "").trim();
   if (search) {
-    const rx = { $regex: escapeRegex(search), $options: "i" };
-    const nameOr = [
-      { "firstName.en": rx },
-      { "firstName.gu": rx },
-      { firstName: rx },
-      { "fatherName.en": rx },
-      { "fatherName.gu": rx },
-      { fatherName: rx },
-      { "grandFatherName.en": rx },
-      { "grandFatherName.gu": rx },
-      { grandFatherName: rx },
-      { "motherName.en": rx },
-      { "motherName.gu": rx },
-      { motherName: rx },
-      { familyId: rx },
-      { "firm.en": rx },
-      { "firm.gu": rx },
-      { firm: rx },
-      { gender: rx },
-      { "gender.en": rx },
-      { "gender.gu": rx },
-      { "martialStatus.en": rx },
-      { "martialStatus.gu": rx },
-      { "activity.en": rx },
-      { "activity.gu": rx },
-      { firstNameEn: rx },
-      { firstNameGu: rx },
-      { fatherNameEn: rx },
-      { fatherNameGu: rx },
-      { grandFatherNameEn: rx },
-      { grandFatherNameGu: rx },
-      { motherNameEn: rx },
-      { motherNameGu: rx },
-      { firmEn: rx },
-      { firmGu: rx },
-    ];
+    const nameClause = containsAny(search, [
+      "firstName",
+      "fatherName",
+      "grandFatherName",
+      "motherName",
+      "familyId",
+      "firm",
+      "gender",
+      "martialStatus",
+      "activity",
+    ]);
     const searchPhone = phoneMatch(search);
-    if (searchPhone) {
-      nameOr.push(searchPhone);
+    if (searchPhone && Object.keys(nameClause).length) {
+      clauses.push({ $or: [nameClause, searchPhone] });
+    } else if (Object.keys(nameClause).length) {
+      clauses.push(nameClause);
+    } else if (searchPhone) {
+      clauses.push(searchPhone);
     }
-    clauses.push({ $or: nameOr });
   }
   if (!clauses.length) {
     return {};
