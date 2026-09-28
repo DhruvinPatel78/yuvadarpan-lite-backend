@@ -4,7 +4,7 @@ const Shortlist = require("../models/shortlist");
 const Yuvalist = require("../models/yuvalist");
 const { idOrObjectIdFilter } = require("../utils/childCount");
 const { verifyToken, errorCheck } = require("../utils/auth");
-const { MEMBER_YUVA_SELECT } = require("../utils/yuvaPublic");
+const { MEMBER_YUVA_SELECT, isHiddenFromMembers, memberBrowseMaritalFilter } = require("../utils/yuvaPublic");
 
 const isRegularUser = (role) => String(role || "").toUpperCase() === "USER";
 
@@ -53,13 +53,19 @@ router.get("/", async (req, res) => {
   const yuvaIds = rows.map((row) => String(row.yuvaId));
   const yuvas = yuvaIds.length
     ? await Yuvalist.find({
-        $or: yuvaIds.flatMap((id) => {
-          const parts = [{ id: { $eq: id } }];
-          if (/^[0-9a-fA-F]{24}$/.test(id)) {
-            parts.push({ _id: id });
-          }
-          return parts;
-        }),
+        $and: [
+          {
+            $or: yuvaIds.flatMap((id) => {
+              const parts = [{ id: { $eq: id } }];
+              if (/^[0-9a-fA-F]{24}$/.test(id)) {
+                parts.push({ _id: id });
+              }
+              return parts;
+            }),
+          },
+          { active: true },
+          memberBrowseMaritalFilter(),
+        ],
       }).select(MEMBER_YUVA_SELECT).exec()
     : [];
   const yuvaMap = new Map();
@@ -87,6 +93,9 @@ router.post("/", async (req, res) => {
   }
   const yuva = await Yuvalist.findOne(idOrObjectIdFilter(yuvaId));
   if (!yuva) {
+    return res.status(404).json({ message: "Profile not found." });
+  }
+  if (yuva.active === false || isHiddenFromMembers(yuva.martialStatus)) {
     return res.status(404).json({ message: "Profile not found." });
   }
   const storedId = String(yuva._id);
