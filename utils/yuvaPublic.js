@@ -10,6 +10,51 @@ const Samaj = require("../models/samaj");
 const { findByAnyId } = require("./childCount");
 const { nameText } = require("./masterName");
 const { withEnGu } = require("./yuvaGu");
+const { escapeRegex } = require("./escapeRegex");
+
+const MEMBER_HIDDEN_MARITAL = {
+  engaged: ["engaged", "Engaged", "વગ્દાન"],
+  married: ["married", "Married", "પરણિત"],
+};
+
+const memberHiddenMaritalValues = () =>
+  [...new Set(Object.values(MEMBER_HIDDEN_MARITAL).flat())];
+
+const maritalStatusTexts = (martialStatus) => {
+  if (martialStatus == null || martialStatus === "") {
+    return [];
+  }
+  if (typeof martialStatus === "object" && !Array.isArray(martialStatus)) {
+    return [martialStatus.en, martialStatus.gu, martialStatus.name]
+      .filter((value) => value != null && value !== "")
+      .map((value) => String(value).trim().toLowerCase());
+  }
+  return [String(martialStatus).trim().toLowerCase()];
+};
+
+const isHiddenFromMembers = (martialStatus) => {
+  const blocked = new Set(
+    memberHiddenMaritalValues().map((value) => String(value).trim().toLowerCase())
+  );
+  return maritalStatusTexts(martialStatus).some((value) => blocked.has(value));
+};
+
+const memberBrowseMaritalFilter = () => {
+  const blocked = memberHiddenMaritalValues();
+  return {
+    $nor: blocked.flatMap((item) => {
+      const rx = {
+        $regex: `^${escapeRegex(String(item).trim())}$`,
+        $options: "i",
+      };
+      return [
+        { martialStatus: rx },
+        { "martialStatus.en": rx },
+        { "martialStatus.gu": rx },
+      ];
+    }),
+  };
+};
 
 const nameOf = async (Model, id) => {
   if (!id) {
@@ -158,6 +203,8 @@ module.exports = {
   getPublicYuvaById,
   pickYuvaFields,
   resolveYuvaLabels,
+  isHiddenFromMembers,
+  memberBrowseMaritalFilter,
   MEMBER_YUVA_KEYS,
   MEMBER_YUVA_SELECT,
   MEMBER_PROFILE_KEYS,
