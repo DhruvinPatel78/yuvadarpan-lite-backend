@@ -5,7 +5,7 @@ const User = require("../models/user");
 const { v4: uuidv4 } = require('uuid');
 const { idsFilter, idOrObjectIdFilter, sanitizeUpdatePayload, findByAnyId } = require("../utils/childCount");
 const { deleteYuvaImages } = require("../utils/s3");
-const { getPublicYuvaById, pickYuvaFields, resolveYuvaLabels, MEMBER_YUVA_SELECT, MEMBER_PROFILE_KEYS } = require("../utils/yuvaPublic");
+const { getPublicYuvaById, pickYuvaFields, resolveYuvaLabels, MEMBER_YUVA_SELECT, MEMBER_PROFILE_KEYS, isHiddenFromMembers, memberBrowseMaritalFilter } = require("../utils/yuvaPublic");
 const { verifyToken, errorCheck } = require("../utils/auth");
 const { escapeRegex } = require("../utils/escapeRegex");
 const { containsAny } = require("../utils/caseInsensitiveSearch");
@@ -312,7 +312,7 @@ const sendPagedYuvas = async (res, filter, page, limit, limited) => {
 const getYuvaListScopeFilter = async (req) => {
   const { id, role } = req.user;
   if (role === "USER") {
-    return { active: true };
+    return { active: true, ...memberBrowseMaritalFilter() };
   }
   if (role === "ADMIN") {
     return {};
@@ -429,6 +429,9 @@ router.get("/list/:id", async (req, res) => {
     }
     const labels = await resolveYuvaLabels(dbYuva);
     if (String(req.user.role).toUpperCase() === "USER") {
+      if (isHiddenFromMembers(dbYuva.martialStatus) || dbYuva.active === false) {
+        return res.status(404).json({ message: "Profile not found." });
+      }
       const picked = pickYuvaFields(withEnGu(dbYuva), MEMBER_PROFILE_KEYS);
       picked.labels = labels;
       return res.json(picked);
