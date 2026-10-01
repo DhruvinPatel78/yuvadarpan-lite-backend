@@ -55,6 +55,10 @@ router.post("/upload", (req, res, next) => {
     let filename = sanitizeFilename(req.body?.filename, file.originalname);
     let body = fs.createReadStream(file.path);
     let contentType = file.mimetype;
+    const folder =
+      String(req.body?.folder || "").trim() === "ad_images"
+        ? "ad_images"
+        : "yuva_images";
 
     try {
       const compressed = await compressYuvaPhoto(file);
@@ -69,16 +73,17 @@ router.post("/upload", (req, res, next) => {
 
     await s3.upload({
       Bucket: BUCKET,
-      Key: "yuva_images/" + filename,
+      Key: folder + "/" + filename,
       Body: body,
       ContentType: contentType,
+      ...(folder === "ad_images" ? { ACL: "public-read" } : {}),
     }).promise();
 
     res.status(200).json({
       data: {
-        url: process.env.AWS_BASE_URL + "yuva_images/" + filename,
+        url: process.env.AWS_BASE_URL + folder + "/" + filename,
         name: filename,
-        awsId: "yuva_images/" + filename,
+        awsId: folder + "/" + filename,
       },
       message: "image-upload-successfully",
     });
