@@ -7,10 +7,12 @@ const Samaj = require("../models/samaj");
 const Surname = require("../models/surname");
 const Gotra = require("../models/gotra");
 const Native = require("../models/native");
+const FamilyId = require("../models/familyId");
 const Role = require("../models/role");
 const User = require("../models/user");
 const Yuvalist = require("../models/yuvalist");
 const { nameText, pairText } = require("./masterName");
+const { idsFilter } = require("./childCount");
 
 const ITEM_LIMIT = 100;
 const PERSON_SELECT = "id firstName middleName fatherName lastName name email allowed";
@@ -300,6 +302,34 @@ const getNativeLinks = async (ids) => {
   return peopleGroups([], yuvas);
 };
 
+const getFamilyIdLinks = async (ids) => {
+  const values = (Array.isArray(ids) ? ids : [ids]).filter(Boolean).map(String);
+  if (!values.length) {
+    return peopleGroups([], []);
+  }
+  const docs = await FamilyId.find({
+    $or: [
+      { id: { $in: values } },
+      ...(values.some((value) => /^[0-9a-fA-F]{24}$/.test(value))
+        ? [{ _id: { $in: values.filter((value) => /^[0-9a-fA-F]{24}$/.test(value)) } }]
+        : []),
+      { familyId: { $in: values } },
+    ],
+  })
+    .select("id familyId")
+    .lean();
+  const matchKeys = uniqueKeys(
+    values,
+    docs.map((doc) => doc.id),
+    docs.map((doc) => doc.familyId),
+  );
+  const [users, yuvas] = await Promise.all([
+    findByField(User, "familyId", matchKeys, {}, PERSON_SELECT),
+    findByField(Yuvalist, "familyId", matchKeys, {}, PERSON_SELECT),
+  ]);
+  return peopleGroups(users, yuvas);
+};
+
 const getRoleLinks = async (ids) => {
   const values = (Array.isArray(ids) ? ids : [ids]).filter(Boolean).map(String);
   const roles = await Role.find(idsFilter(values)).select("id name").lean();
@@ -337,6 +367,7 @@ const HANDLERS = {
   surname: getSurnameLinks,
   gotra: getGotraLinks,
   native: getNativeLinks,
+  familyId: getFamilyIdLinks,
   role: getRoleLinks,
   user: getUserLinks,
   yuva: getYuvaLinks,
