@@ -4,6 +4,7 @@ const FamilyId = require("../models/familyId");
 const { idsFilter, idOrObjectIdFilter, sanitizeUpdatePayload, findByAnyId } = require("../utils/childCount");
 const { rejectLocationMasterWrite, findAccountByTokenId } = require("../utils/managerScope");
 const { attachLinkedRoute } = require("../utils/linkedRecords");
+const { recordActivity, recordActivityMany } = require("../utils/activityLog");
 const { verifyToken, errorCheck, requireAuth } = require("../utils/auth");
 const { escapeRegex } = require("../utils/escapeRegex");
 
@@ -133,6 +134,10 @@ router.post("/add", async (req, res) => {
       created.push(row);
     }
 
+    if (created.length) {
+      await recordActivityMany(req, "create", "familyId", created);
+    }
+
     if (values.length === 1) {
       return res.status(200).send(created[0] || existing[0]);
     }
@@ -155,9 +160,10 @@ router.post("/add", async (req, res) => {
 router.delete("/delete", async (req, res) => {
   if (!errorCheck(req, res) && !rejectLocationMasterWrite(req, res)) {
     const data = req.body;
-    await FamilyId.deleteMany(
-      idsFilter(data?.familyIds || data?.ids || data?.natives)
-    );
+    const filter = idsFilter(data?.familyIds || data?.ids || data?.natives);
+    const docs = await FamilyId.find(filter).lean();
+    await FamilyId.deleteMany(filter);
+    await recordActivityMany(req, "delete", "familyId", docs);
     res.status(200).json({ message: "Delete Successfully" });
   }
 });
@@ -193,12 +199,20 @@ router.patch("/update/:id", async (req, res) => {
         return res.status(409).json({ message: "Family ID already exists." });
       }
     }
+    const previous = current.toObject ? current.toObject() : current;
     await FamilyId.updateOne(idOrObjectIdFilter(id), {
       $set: {
         ...payload,
         updatedAt: new Date(),
         updatedBy: req?.user?.id,
       },
+    });
+    await recordActivity({
+      req,
+      action: "update",
+      entityType: "familyId",
+      previous,
+      next: { ...previous, ...payload },
     });
     res.status(200).json({ message: "Update Successfully" });
   } catch (error) {
