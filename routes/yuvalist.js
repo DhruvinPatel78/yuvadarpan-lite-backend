@@ -300,7 +300,12 @@ const sendPagedYuvas = async (res, filter, page, limit, limited) => {
   const [data, total] = await Promise.all([
     query
       .collation({ locale: "en", strength: 2 })
-      .sort({ "firstName.en": 1, "fatherName.en": 1, lastName: 1 })
+      .sort({
+        "firstName.en": 1,
+        "motherName.en": 1,
+        "fatherName.en": 1,
+        "grandFatherName.en": 1,
+      })
       .skip(offset)
       .limit(limit)
       .exec(),
