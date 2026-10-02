@@ -298,7 +298,12 @@ const sendPagedYuvas = async (res, filter, page, limit, limited) => {
     query = query.select(MEMBER_YUVA_SELECT);
   }
   const [data, total] = await Promise.all([
-    query.skip(offset).limit(limit).exec(),
+    query
+      .collation({ locale: "en", strength: 2 })
+      .sort({ "firstName.en": 1, "fatherName.en": 1, lastName: 1 })
+      .skip(offset)
+      .limit(limit)
+      .exec(),
     Yuvalist.countDocuments(filter),
   ]);
   res.status(200).json({
