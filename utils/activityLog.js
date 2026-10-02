@@ -247,6 +247,9 @@ const getEntityLabel = async (entityType, doc) => {
   if (entityType === "user" || entityType === "yuva") {
     return personLabel(doc);
   }
+  if (entityType === "familyId") {
+    return String(doc.familyId || "").trim();
+  }
   return nameText(doc) || doc.label || "";
 };
 
@@ -283,7 +286,12 @@ const buildSummary = ({
   const actor = actorName ? `${actorName} (${actorId})` : actorId;
   const target = entityId || entityLabel || "record";
   const when = formatDateTime(createdAt);
-  const typeLabel = entityType === "samaj" ? "samaj" : entityType;
+  const typeLabel =
+    entityType === "samaj"
+      ? "samaj"
+      : entityType === "familyId"
+        ? "Family ID"
+        : entityType;
   if (action === "approve") return `${actor} approved ${target} request.`;
   if (action === "reject") return `${actor} rejected ${target} request.`;
   if (action === "create") {
