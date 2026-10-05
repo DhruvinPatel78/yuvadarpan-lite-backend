@@ -11,6 +11,7 @@ const {
   createCheckoutPayment,
   getCheckoutOrderStatus,
   validatePhonePeCallback,
+  describePhonePeError,
 } = require("../utils/phonepe");
 const {
   normalizeFamilyId,
@@ -144,11 +145,20 @@ router.post("/create", verifyToken(), requireAuth, async (req, res) => {
       state: checkout.state || "PENDING",
     });
   } catch (error) {
-    console.error("payment-create-failed", error.message);
+    console.error(
+      "payment-create-failed",
+      error?.type || error?.name,
+      error?.httpStatusCode,
+      error.message
+    );
     if (error.code === "PHONEPE_NOT_CONFIGURED") {
       return res.status(503).json({ message: error.message });
     }
-    res.status(500).json({ message: "Could not start payment." });
+    const described = describePhonePeError(error);
+    return res.status(502).json({
+      message: described.message,
+      code: described.code,
+    });
   }
 });
 
@@ -239,12 +249,23 @@ router.get(
 );
 
 router.post("/webhook", async (req, res) => {
-  if (rejectIfPaymentDisabled(res)) return;
+  // PhonePe validates webhook URLs with a POST and expects 2xx.
+  // Keep this reachable even when the payment feature flag is off.
+  if (!isPaymentEnabled()) {
+    return res.status(200).json({ received: true, enabled: false });
+  }
+
   try {
     const authorization =
       req.get("Authorization") || req.get("authorization") || "";
     const rawBody =
       typeof req.body === "string" ? req.body : JSON.stringify(req.body || {});
+
+    // Reachability / empty validation probes from PhonePe.
+    if (!authorization || rawBody === "{}" || rawBody === "") {
+      return res.status(200).json({ received: true, ok: true });
+    }
+
     const callback = validatePhonePeCallback(authorization, rawBody);
     const payload = callback?.payload || {};
     const merchantOrderId = String(
@@ -276,10 +297,12 @@ router.post("/webhook", async (req, res) => {
     res.status(200).json({ received: true });
   } catch (error) {
     console.error("payment-webhook-failed", error.message);
-    if (error.code === "PHONEPE_WEBHOOK_NOT_CONFIGURED") {
-      return res.status(503).json({ message: error.message });
-    }
-    res.status(400).json({ message: "Invalid webhook." });
+    // Still acknowledge so PhonePe does not treat the endpoint as down.
+    res.status(200).json({
+      received: true,
+      error: true,
+      message: error.message || "Webhook handling failed.",
+    });
   }
 });
 

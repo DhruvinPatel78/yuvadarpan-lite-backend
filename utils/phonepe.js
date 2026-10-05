@@ -33,12 +33,53 @@ const getPhonePeClient = () => {
     throw error;
   }
 
-  return StandardCheckoutClient.getInstance(
-    clientId,
-    clientSecret,
-    clientVersion,
-    envName === "PRODUCTION" ? Env.PRODUCTION : Env.SANDBOX
-  );
+  try {
+    return StandardCheckoutClient.getInstance(
+      clientId,
+      clientSecret,
+      clientVersion,
+      envName === "PRODUCTION" ? Env.PRODUCTION : Env.SANDBOX
+    );
+  } catch (error) {
+    // Re-init can throw if env/credentials changed after first getInstance.
+    if (
+      error?.message &&
+      /already|instance|initialized/i.test(String(error.message))
+    ) {
+      return StandardCheckoutClient.getInstance(
+        clientId,
+        clientSecret,
+        clientVersion,
+        envName === "PRODUCTION" ? Env.PRODUCTION : Env.SANDBOX
+      );
+    }
+    throw error;
+  }
+};
+
+const describePhonePeError = (error) => {
+  const status = error?.httpStatusCode || error?.statusCode;
+  const type = error?.type || error?.name || "";
+  if (status === 403 || type === "ForbiddenAccess") {
+    return {
+      code: "PHONEPE_FORBIDDEN",
+      message:
+        "PhonePe rejected the credentials (Forbidden). Verify PHONEPE_CLIENT_ID, PHONEPE_CLIENT_SECRET, PHONEPE_CLIENT_VERSION, and PHONEPE_ENV match Developer Settings for Payment Gateway (V2).",
+    };
+  }
+  if (status === 401 || type === "UnauthorizedAccess") {
+    return {
+      code: "PHONEPE_UNAUTHORIZED",
+      message:
+        "PhonePe authorization failed. Check client credentials and environment.",
+    };
+  }
+  return {
+    code: error?.code || "PHONEPE_ERROR",
+    message:
+      error?.message ||
+      "Could not start payment with PhonePe. Please try again.",
+  };
 };
 
 const amountInPaisa = (inr = ACCESS_PRICE_INR) =>
@@ -103,4 +144,5 @@ module.exports = {
   createCheckoutPayment,
   getCheckoutOrderStatus,
   validatePhonePeCallback,
+  describePhonePeError,
 };
