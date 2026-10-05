@@ -32,6 +32,7 @@ const {
 const { attachLinkedRoute } = require("../utils/linkedRecords");
 const { recordActivity, recordActivityMany } = require("../utils/activityLog");
 const { prepareYuvaRecord, withEnGu, omitGu } = require("../utils/yuvaGu");
+const { exportYuvaList } = require("../utils/yuvaExport");
 
 const dropStoredGu = async (docs = []) => {
   const ids = docs.map((doc) => doc?._id).filter(Boolean);
@@ -383,6 +384,34 @@ router.get("/list", async (req, res) => {
   } catch (e) {
     console.error("yuva list failed", e);
     res.status(500).json({ message: "Could not load data." });
+  }
+});
+
+router.get("/export", async (req, res) => {
+  if (errorCheck(req, res)) {
+    return;
+  }
+  if (String(req.user.role).toUpperCase() === "USER") {
+    return res.status(403).json({ message: "You cannot do this." });
+  }
+  const format = String(req.query.format || "").trim().toLowerCase();
+  if (format !== "csv" && format !== "pdf") {
+    return res.status(400).json({ message: "Choose CSV or PDF." });
+  }
+  const language = String(req.query.language || "gu").toLowerCase() === "en" ? "en" : "gu";
+  try {
+    const filter = mergeFilters(
+      buildYuvaListFilter(req.query),
+      await getYuvaListScopeFilter(req)
+    );
+    await exportYuvaList({ res, filter, format, language });
+  } catch (e) {
+    console.error("yuva export failed", e);
+    if (!res.headersSent) {
+      res.status(500).json({ message: "Could not export data." });
+    } else {
+      res.end();
+    }
   }
 });
 
