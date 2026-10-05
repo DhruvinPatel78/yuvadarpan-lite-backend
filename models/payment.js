@@ -18,6 +18,22 @@ const paymentSchema = new mongoose.Schema(
       required: true,
       index: true,
     },
+    userName: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+    userEmail: {
+      type: String,
+      default: "",
+      trim: true,
+      lowercase: true,
+    },
+    userMobile: {
+      type: String,
+      default: "",
+      trim: true,
+    },
     familyId: {
       type: String,
       required: true,
@@ -58,5 +74,7 @@ const paymentSchema = new mongoose.Schema(
 );
 
 paymentSchema.index({ userId: 1, status: 1 });
+paymentSchema.index({ status: 1, paidAt: -1 });
+paymentSchema.index({ createdAt: -1 });
 
 module.exports = mongoose.model("Payment", paymentSchema);

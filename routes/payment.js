@@ -3,7 +3,7 @@ const crypto = require("crypto");
 const router = express.Router();
 const Payment = require("../models/payment");
 const { verifyToken, errorCheck, requireAuth } = require("../utils/auth");
-const { findAccountByTokenId } = require("../utils/managerScope");
+const { findAccountByTokenId, isAdmin } = require("../utils/managerScope");
 const {
   ACCESS_PRICE_INR,
   isPaymentEnabled,
@@ -38,6 +38,21 @@ const paymentReturnUrl = (merchantOrderId) =>
     merchantOrderId
   )}`;
 
+const userDisplayName = (account) =>
+  [account?.firstName, account?.middleName, account?.lastName]
+    .map((part) => String(part || "").trim())
+    .filter(Boolean)
+    .join(" ");
+
+const userSnapshotFromAccount = (account) => ({
+  userName: userDisplayName(account),
+  userEmail: String(account?.email || "").trim().toLowerCase(),
+  userMobile: String(account?.mobile || "").trim(),
+});
+
+const escapeRegex = (value) =>
+  String(value || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
 const rejectIfPaymentDisabled = (res) => {
   if (isPaymentEnabled()) {
     return false;
@@ -47,6 +62,47 @@ const rejectIfPaymentDisabled = (res) => {
     message: "Payment is currently disabled.",
   });
   return true;
+};
+
+const rejectNonAdmin = (req, res) => {
+  if (!isAdmin(req.user?.role)) {
+    res.status(403).json({ message: "You cannot do this." });
+    return true;
+  }
+  return false;
+};
+
+const enrichPaymentRows = async (rows) => {
+  const missingUserIds = [
+    ...new Set(
+      rows
+        .filter((row) => !row.userName && !row.userEmail && row.userId)
+        .map((row) => String(row.userId))
+    ),
+  ];
+  const byId = new Map();
+  if (missingUserIds.length) {
+    await Promise.all(
+      missingUserIds.map(async (id) => {
+        const user = await findAccountByTokenId(id);
+        if (user) {
+          byId.set(id, userSnapshotFromAccount(user));
+        }
+      })
+    );
+  }
+
+  return rows.map((row) => {
+    const fallback = byId.get(String(row.userId)) || {};
+    return {
+      ...row,
+      id: row.id || String(row._id || ""),
+      userName: row.userName || fallback.userName || "",
+      userEmail: row.userEmail || fallback.userEmail || "",
+      userMobile: row.userMobile || fallback.userMobile || "",
+      purchasedAt: row.paidAt || row.updatedAt || row.createdAt || null,
+    };
+  });
 };
 
 router.get("/access-price", verifyToken(), requireAuth, async (req, res) => {
@@ -59,6 +115,92 @@ router.get("/access-price", verifyToken(), requireAuth, async (req, res) => {
     currency: "INR",
     product: "Yuvadarpan digital access",
   });
+});
+
+router.get("/report", verifyToken(), requireAuth, async (req, res) => {
+  if (errorCheck(req, res) || rejectNonAdmin(req, res)) return;
+  try {
+    const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 10));
+    const offset = (page - 1) * limit;
+    const search = String(req.query.search || "").trim();
+    const status = String(req.query.status || "").trim().toUpperCase();
+    const from = String(req.query.from || "").trim();
+    const to = String(req.query.to || "").trim();
+
+    const query = {};
+    if (status && status !== "ALL") {
+      query.status = status;
+    }
+    if (search) {
+      const rx = new RegExp(escapeRegex(search), "i");
+      query.$or = [
+        { merchantOrderId: rx },
+        { phonepeOrderId: rx },
+        { familyId: rx },
+        { userName: rx },
+        { userEmail: rx },
+        { userMobile: rx },
+        { userId: rx },
+      ];
+    }
+
+    const dateFilter = {};
+    if (from) {
+      const fromDate = new Date(from);
+      if (!Number.isNaN(fromDate.getTime())) {
+        dateFilter.$gte = fromDate;
+      }
+    }
+    if (to) {
+      const toDate = new Date(to);
+      if (!Number.isNaN(toDate.getTime())) {
+        toDate.setHours(23, 59, 59, 999);
+        dateFilter.$lte = toDate;
+      }
+    }
+    if (Object.keys(dateFilter).length) {
+      query.createdAt = dateFilter;
+    }
+
+    const summaryMatch = { ...query, status: "COMPLETED" };
+
+    const [rawRows, total, completedAgg] = await Promise.all([
+      Payment.find(query)
+        .sort({ paidAt: -1, createdAt: -1 })
+        .skip(offset)
+        .limit(limit)
+        .lean(),
+      Payment.countDocuments(query),
+      Payment.aggregate([
+        { $match: summaryMatch },
+        {
+          $group: {
+            _id: null,
+            count: { $sum: 1 },
+            amountInr: { $sum: "$amountInr" },
+          },
+        },
+      ]),
+    ]);
+
+    const data = await enrichPaymentRows(rawRows);
+    const completed = completedAgg[0] || { count: 0, amountInr: 0 };
+
+    res.status(200).json({
+      total,
+      page,
+      totalPages: Math.ceil(total / limit) || 0,
+      data,
+      summary: {
+        completedCount: completed.count || 0,
+        completedAmountInr: completed.amountInr || 0,
+      },
+    });
+  } catch (error) {
+    console.error("payment-report-failed", error.message);
+    res.status(500).json({ message: "Could not load purchase report." });
+  }
 });
 
 router.post("/create", verifyToken(), requireAuth, async (req, res) => {
@@ -118,10 +260,12 @@ router.post("/create", verifyToken(), requireAuth, async (req, res) => {
     });
 
     const now = new Date();
+    const userSnapshot = userSnapshotFromAccount(account);
     await Payment.create({
       merchantOrderId,
       phonepeOrderId: checkout.orderId || "",
       userId: String(account._id),
+      ...userSnapshot,
       familyId,
       amountInr: ACCESS_PRICE_INR,
       amountPaisa,
@@ -186,7 +330,12 @@ router.get(
 
       if (payment.status === "COMPLETED") {
         // Re-run grant in case an earlier COMPLETED missed Family ID creation.
-        await completeAccessPayment({ payment, req });
+        const account = await findAccountByTokenId(req.user.id);
+        await completeAccessPayment({
+          payment,
+          req,
+          userSnapshot: account ? userSnapshotFromAccount(account) : null,
+        });
         return res.status(200).json({
           merchantOrderId,
           status: "COMPLETED",
@@ -212,10 +361,12 @@ router.get(
 
       const remoteState = String(remote?.state || "").toUpperCase();
       if (remoteState === "COMPLETED") {
+        const account = await findAccountByTokenId(req.user.id);
         await completeAccessPayment({
           payment,
           phonepeOrderId: remote.orderId || payment.phonepeOrderId,
           req,
+          userSnapshot: account ? userSnapshotFromAccount(account) : null,
         });
         return res.status(200).json({
           merchantOrderId,

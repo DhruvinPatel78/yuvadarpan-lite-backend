@@ -93,9 +93,29 @@ const completeAccessPayment = async ({
   payment,
   phonepeOrderId = "",
   req = null,
+  userSnapshot = null,
 }) => {
   if (!payment) {
     return { payment: null, granted: false };
+  }
+
+  let snapshotChanged = false;
+  if (userSnapshot) {
+    if (userSnapshot.userName && payment.userName !== userSnapshot.userName) {
+      payment.userName = userSnapshot.userName;
+      snapshotChanged = true;
+    }
+    if (userSnapshot.userEmail && payment.userEmail !== userSnapshot.userEmail) {
+      payment.userEmail = userSnapshot.userEmail;
+      snapshotChanged = true;
+    }
+    if (
+      userSnapshot.userMobile &&
+      payment.userMobile !== userSnapshot.userMobile
+    ) {
+      payment.userMobile = userSnapshot.userMobile;
+      snapshotChanged = true;
+    }
   }
 
   const grant = await ensureFamilyIdAccess({
@@ -105,6 +125,10 @@ const completeAccessPayment = async ({
   });
 
   const updated = await markPaymentCompleted(payment, { phonepeOrderId });
+  if (snapshotChanged && updated?.status === "COMPLETED") {
+    updated.updatedAt = new Date();
+    await updated.save();
+  }
   return {
     payment: updated,
     granted: true,
