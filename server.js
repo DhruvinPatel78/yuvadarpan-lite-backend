@@ -51,6 +51,7 @@ const gotraRouter = require("./routes/gotra");
 const roleRouter = require("./routes/role");
 const shortlistRouter = require("./routes/shortlist");
 const activityLogRouter = require("./routes/activityLog");
+const paymentRouter = require("./routes/payment");
 const { specs, swaggerUi } = require("./swagger");
 
 const app = express();
@@ -110,6 +111,7 @@ app.use("/gotra", gotraRouter);
 app.use("/role", roleRouter);
 app.use("/shortlist", shortlistRouter);
 app.use("/logs", activityLogRouter);
+app.use("/payment", paymentRouter);
 
 app.listen(PORT, () => {
   console.log(`Server is up and running on ${PORT}`);
