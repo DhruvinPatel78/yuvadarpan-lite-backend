@@ -2,8 +2,11 @@ const express = require("express");
 const crypto = require("crypto");
 const router = express.Router();
 const Payment = require("../models/payment");
+const Surname = require("../models/surname");
 const { verifyToken, errorCheck, requireAuth } = require("../utils/auth");
 const { findAccountByTokenId, isAdmin } = require("../utils/managerScope");
+const { idOrObjectIdFilter } = require("../utils/childCount");
+const { nameText } = require("../utils/masterName");
 const {
   ACCESS_PRICE_INR,
   isPaymentEnabled,
@@ -38,17 +41,30 @@ const paymentReturnUrl = (merchantOrderId) =>
     merchantOrderId
   )}`;
 
-const userDisplayName = (account) =>
-  [account?.firstName, account?.middleName, account?.lastName]
-    .map((part) => String(part || "").trim())
+const resolveSurnameLabel = async (lastNameRef) => {
+  const value = String(lastNameRef || "").trim();
+  if (!value) return "";
+  try {
+    const doc = await Surname.findOne(idOrObjectIdFilter(value)).lean();
+    return nameText(doc) || "";
+  } catch {
+    return "";
+  }
+};
+
+const userSnapshotFromAccount = async (account) => {
+  const firstName = String(account?.firstName || "").trim();
+  const middleName = String(account?.middleName || "").trim();
+  const lastNameLabel = await resolveSurnameLabel(account?.lastName);
+  const userName = [firstName, middleName, lastNameLabel]
     .filter(Boolean)
     .join(" ");
-
-const userSnapshotFromAccount = (account) => ({
-  userName: userDisplayName(account),
-  userEmail: String(account?.email || "").trim().toLowerCase(),
-  userMobile: String(account?.mobile || "").trim(),
-});
+  return {
+    userName,
+    userEmail: String(account?.email || "").trim().toLowerCase(),
+    userMobile: String(account?.mobile || "").trim(),
+  };
+};
 
 const escapeRegex = (value) =>
   String(value || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -72,34 +88,33 @@ const rejectNonAdmin = (req, res) => {
   return false;
 };
 
+const looksLikeUnresolvedSurnameId = (userName = "") =>
+  /(?:^|\s)[a-f0-9]{24,}(?:\s|$)/i.test(String(userName));
+
 const enrichPaymentRows = async (rows) => {
-  const missingUserIds = [
-    ...new Set(
-      rows
-        .filter((row) => !row.userName && !row.userEmail && row.userId)
-        .map((row) => String(row.userId))
-    ),
-  ];
+  const userIds = [...new Set(rows.map((row) => String(row.userId || "")).filter(Boolean))];
   const byId = new Map();
-  if (missingUserIds.length) {
-    await Promise.all(
-      missingUserIds.map(async (id) => {
-        const user = await findAccountByTokenId(id);
-        if (user) {
-          byId.set(id, userSnapshotFromAccount(user));
-        }
-      })
-    );
-  }
+  await Promise.all(
+    userIds.map(async (id) => {
+      const user = await findAccountByTokenId(id);
+      if (user) {
+        byId.set(id, await userSnapshotFromAccount(user));
+      }
+    })
+  );
 
   return rows.map((row) => {
-    const fallback = byId.get(String(row.userId)) || {};
+    const live = byId.get(String(row.userId)) || {};
+    const storedName = String(row.userName || "").trim();
+    const useLiveName =
+      live.userName &&
+      (!storedName || looksLikeUnresolvedSurnameId(storedName));
     return {
       ...row,
       id: row.id || String(row._id || ""),
-      userName: row.userName || fallback.userName || "",
-      userEmail: row.userEmail || fallback.userEmail || "",
-      userMobile: row.userMobile || fallback.userMobile || "",
+      userName: useLiveName ? live.userName : storedName || live.userName || "",
+      userEmail: row.userEmail || live.userEmail || "",
+      userMobile: row.userMobile || live.userMobile || "",
       purchasedAt: row.paidAt || row.updatedAt || row.createdAt || null,
     };
   });
@@ -260,7 +275,7 @@ router.post("/create", verifyToken(), requireAuth, async (req, res) => {
     });
 
     const now = new Date();
-    const userSnapshot = userSnapshotFromAccount(account);
+    const userSnapshot = await userSnapshotFromAccount(account);
     await Payment.create({
       merchantOrderId,
       phonepeOrderId: checkout.orderId || "",
@@ -334,7 +349,7 @@ router.get(
         await completeAccessPayment({
           payment,
           req,
-          userSnapshot: account ? userSnapshotFromAccount(account) : null,
+          userSnapshot: account ? await userSnapshotFromAccount(account) : null,
         });
         return res.status(200).json({
           merchantOrderId,
@@ -366,7 +381,7 @@ router.get(
           payment,
           phonepeOrderId: remote.orderId || payment.phonepeOrderId,
           req,
-          userSnapshot: account ? userSnapshotFromAccount(account) : null,
+          userSnapshot: account ? await userSnapshotFromAccount(account) : null,
         });
         return res.status(200).json({
           merchantOrderId,
