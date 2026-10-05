@@ -7,13 +7,6 @@ const ACCESS_PRICE_INR = Math.max(
 
 let cachedToken = null;
 
-const isPaymentEnabled = () => {
-  const raw = String(process.env.PAYMENT_ENABLED || "false")
-    .trim()
-    .toLowerCase();
-  return raw === "1" || raw === "true" || raw === "yes" || raw === "on";
-};
-
 const isProductionEnv = () =>
   String(process.env.PHONEPE_ENV || "SANDBOX")
     .trim()
@@ -314,7 +307,6 @@ const validatePhonePeCallback = (authorization, responseBody) => {
 
 module.exports = {
   ACCESS_PRICE_INR,
-  isPaymentEnabled,
   amountInPaisa,
   createCheckoutPayment,
   getCheckoutOrderStatus,

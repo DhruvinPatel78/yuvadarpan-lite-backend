@@ -9,13 +9,16 @@ const { idOrObjectIdFilter } = require("../utils/childCount");
 const { nameText } = require("../utils/masterName");
 const {
   ACCESS_PRICE_INR,
-  isPaymentEnabled,
   amountInPaisa,
   createCheckoutPayment,
   getCheckoutOrderStatus,
   validatePhonePeCallback,
   describePhonePeError,
 } = require("../utils/phonepe");
+const {
+  getPaymentEnabled,
+  setPaymentEnabled,
+} = require("../models/appSetting");
 const {
   normalizeFamilyId,
   findFamilyIdDoc,
@@ -69,8 +72,8 @@ const userSnapshotFromAccount = async (account) => {
 const escapeRegex = (value) =>
   String(value || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
-const rejectIfPaymentDisabled = (res) => {
-  if (isPaymentEnabled()) {
+const rejectIfPaymentDisabled = async (res) => {
+  if (await getPaymentEnabled()) {
     return false;
   }
   res.status(403).json({
@@ -122,7 +125,7 @@ const enrichPaymentRows = async (rows) => {
 
 router.get("/access-price", verifyToken(), requireAuth, async (req, res) => {
   if (errorCheck(req, res)) return;
-  const enabled = isPaymentEnabled();
+  const enabled = await getPaymentEnabled();
   res.status(200).json({
     enabled,
     amountInr: ACCESS_PRICE_INR,
@@ -130,6 +133,34 @@ router.get("/access-price", verifyToken(), requireAuth, async (req, res) => {
     currency: "INR",
     product: "Yuvadarpan digital access",
   });
+});
+
+router.get("/enabled", verifyToken(), requireAuth, async (req, res) => {
+  if (errorCheck(req, res) || rejectNonAdmin(req, res)) return;
+  try {
+    const enabled = await getPaymentEnabled();
+    res.status(200).json({ enabled });
+  } catch (error) {
+    console.error("payment-enabled-get-failed", error.message);
+    res.status(500).json({ message: "Could not load payment setting." });
+  }
+});
+
+router.patch("/enabled", verifyToken(), requireAuth, async (req, res) => {
+  if (errorCheck(req, res) || rejectNonAdmin(req, res)) return;
+  try {
+    const enabled = Boolean(req.body?.enabled);
+    await setPaymentEnabled(enabled, req.user?.id);
+    res.status(200).json({
+      enabled,
+      message: enabled
+        ? "Family ID payments are now enabled."
+        : "Family ID payments are now disabled.",
+    });
+  } catch (error) {
+    console.error("payment-enabled-set-failed", error.message);
+    res.status(500).json({ message: "Could not update payment setting." });
+  }
 });
 
 router.get("/report", verifyToken(), requireAuth, async (req, res) => {
@@ -219,7 +250,7 @@ router.get("/report", verifyToken(), requireAuth, async (req, res) => {
 });
 
 router.post("/create", verifyToken(), requireAuth, async (req, res) => {
-  if (errorCheck(req, res) || rejectIfPaymentDisabled(res)) return;
+  if (errorCheck(req, res) || (await rejectIfPaymentDisabled(res))) return;
   try {
     const account = await findAccountByTokenId(req.user.id);
     if (!account) {
@@ -328,7 +359,7 @@ router.get(
   verifyToken(),
   requireAuth,
   async (req, res) => {
-    if (errorCheck(req, res) || rejectIfPaymentDisabled(res)) return;
+    if (errorCheck(req, res)) return;
     try {
       const merchantOrderId = String(req.params.merchantOrderId || "").trim();
       if (!merchantOrderId) {
@@ -420,11 +451,8 @@ router.get(
 
 router.post("/webhook", async (req, res) => {
   // PhonePe validates webhook URLs with a POST and expects 2xx.
-  // Keep this reachable even when the payment feature flag is off.
-  if (!isPaymentEnabled()) {
-    return res.status(200).json({ received: true, enabled: false });
-  }
-
+  // Always process callbacks so in-flight payments can complete even if
+  // new checkouts are disabled from Settings.
   try {
     const authorization =
       req.get("Authorization") || req.get("authorization") || "";

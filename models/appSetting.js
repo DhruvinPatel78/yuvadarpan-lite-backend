@@ -30,6 +30,7 @@ const appSettingSchema = new mongoose.Schema(
 const AppSetting = mongoose.model("AppSetting", appSettingSchema);
 
 const ADVERTISEMENT_ENABLED_KEY = "advertisementEnabled";
+const PAYMENT_ENABLED_KEY = "paymentEnabled";
 
 const getAdvertisementEnabled = async () => {
   const row = await AppSetting.findOne({ key: ADVERTISEMENT_ENABLED_KEY }).lean();
@@ -54,9 +55,36 @@ const setAdvertisementEnabled = async (enabled, userId) => {
   );
 };
 
+/** Admin-controlled via Settings. Default off until enabled. */
+const getPaymentEnabled = async () => {
+  const row = await AppSetting.findOne({ key: PAYMENT_ENABLED_KEY }).lean();
+  if (!row) {
+    return false;
+  }
+  return row.value !== false && row.value !== "false" && row.value !== 0;
+};
+
+const setPaymentEnabled = async (enabled, userId) => {
+  return AppSetting.findOneAndUpdate(
+    { key: PAYMENT_ENABLED_KEY },
+    {
+      $set: {
+        key: PAYMENT_ENABLED_KEY,
+        value: Boolean(enabled),
+        updatedAt: new Date(),
+        updatedBy: userId || null,
+      },
+    },
+    { upsert: true, new: true }
+  );
+};
+
 module.exports = {
   AppSetting,
   ADVERTISEMENT_ENABLED_KEY,
+  PAYMENT_ENABLED_KEY,
   getAdvertisementEnabled,
   setAdvertisementEnabled,
+  getPaymentEnabled,
+  setPaymentEnabled,
 };
