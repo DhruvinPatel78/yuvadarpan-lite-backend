@@ -19,11 +19,24 @@ const {
   completeAccessPayment,
 } = require("../utils/grantFamilyAccess");
 
-const frontendBase = () =>
-  String(process.env.FRONTEND_URL || "http://localhost:3000").replace(
-    /\/$/,
-    ""
-  );
+/** Origin only — strip paths like `/login` that break post-payment redirects. */
+const frontendBase = () => {
+  const raw = String(process.env.FRONTEND_URL || "http://localhost:3000").trim();
+  try {
+    const url = new URL(raw);
+    return url.origin;
+  } catch {
+    return raw
+      .replace(/\/+$/, "")
+      .replace(/\/login$/i, "")
+      .replace(/\/+$/, "");
+  }
+};
+
+const paymentReturnUrl = (merchantOrderId) =>
+  `${frontendBase()}/connect-samaj?payment=${encodeURIComponent(
+    merchantOrderId
+  )}`;
 
 const rejectIfPaymentDisabled = (res) => {
   if (isPaymentEnabled()) {
@@ -78,33 +91,22 @@ router.post("/create", verifyToken(), requireAuth, async (req, res) => {
       });
     }
 
-    const openPayment = await Payment.findOne({
-      userId: String(account._id),
-      familyId,
-      status: { $in: ["CREATED", "PENDING"] },
-      createdAt: { $gte: new Date(Date.now() - 30 * 60 * 1000) },
-      redirectUrl: { $exists: true, $ne: "" },
-    }).sort({ createdAt: -1 });
-
-    if (openPayment?.redirectUrl) {
-      return res.status(200).json({
-        merchantOrderId: openPayment.merchantOrderId,
-        orderId: openPayment.phonepeOrderId,
-        redirectUrl: openPayment.redirectUrl,
-        amountInr: openPayment.amountInr || ACCESS_PRICE_INR,
-        amountPaisa: openPayment.amountPaisa || amountInPaisa(ACCESS_PRICE_INR),
-        state: openPayment.status,
-        resumed: true,
-      });
-    }
+    // Do not resume older checkouts — their PhonePe redirectUrl may point at a
+    // bad path (e.g. /login/connect-samaj) if FRONTEND_URL was misconfigured.
+    await Payment.updateMany(
+      {
+        userId: String(account._id),
+        familyId,
+        status: { $in: ["CREATED", "PENDING"] },
+      },
+      { $set: { status: "EXPIRED", updatedAt: new Date() } }
+    );
 
     const merchantOrderId = `YD${Date.now()}${crypto
       .randomBytes(3)
       .toString("hex")}`.slice(0, 40);
     const amountPaisa = amountInPaisa(ACCESS_PRICE_INR);
-    const redirectUrl = `${frontendBase()}/connect-samaj?payment=${encodeURIComponent(
-      merchantOrderId
-    )}`;
+    const redirectUrl = paymentReturnUrl(merchantOrderId);
 
     const checkout = await createCheckoutPayment({
       merchantOrderId,
@@ -183,6 +185,8 @@ router.get(
       }
 
       if (payment.status === "COMPLETED") {
+        // Re-run grant in case an earlier COMPLETED missed Family ID creation.
+        await completeAccessPayment({ payment, req });
         return res.status(200).json({
           merchantOrderId,
           status: "COMPLETED",

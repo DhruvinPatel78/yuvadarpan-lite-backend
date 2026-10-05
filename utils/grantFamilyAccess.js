@@ -6,28 +6,29 @@ const { recordActivity } = require("./activityLog");
 
 const normalizeFamilyId = (value) => String(value ?? "").trim();
 
-const findFamilyIdDoc = async (familyId) => {
+const findFamilyIdDoc = async (familyId, { includeInactive = false } = {}) => {
   const value = normalizeFamilyId(familyId);
   if (!value) return null;
   const numericFamilyId = Number(value);
-  return FamilyId.findOne({
-    $and: [
-      {
-        $or: [
-          { familyId: value },
-          {
-            familyId: {
-              $regex: new RegExp(`^${escapeRegex(value)}$`, "i"),
-            },
+  const filters = [
+    {
+      $or: [
+        { familyId: value },
+        {
+          familyId: {
+            $regex: new RegExp(`^${escapeRegex(value)}$`, "i"),
           },
-          ...(Number.isFinite(numericFamilyId)
-            ? [{ familyId: String(numericFamilyId) }]
-            : []),
-        ],
-      },
-      { active: { $ne: false } },
-    ],
-  });
+        },
+        ...(Number.isFinite(numericFamilyId)
+          ? [{ familyId: String(numericFamilyId) }]
+          : []),
+      ],
+    },
+  ];
+  if (!includeInactive) {
+    filters.push({ active: { $ne: false } });
+  }
+  return FamilyId.findOne({ $and: filters });
 };
 
 const ensureFamilyIdAccess = async ({ familyId, userId, req = null }) => {
@@ -36,7 +37,7 @@ const ensureFamilyIdAccess = async ({ familyId, userId, req = null }) => {
     return { created: false, familyId: "", doc: null };
   }
 
-  const existing = await findFamilyIdDoc(value);
+  const existing = await findFamilyIdDoc(value, { includeInactive: true });
   if (existing) {
     if (existing.active === false) {
       existing.active = true;
