@@ -12,6 +12,7 @@ const envPath = path.join(__dirname, envFile);
 const loadedEnv = fs.existsSync(envPath) ? envPath : path.join(__dirname, ".env");
 const dotenv = require("dotenv");
 dotenv.config({ path: loadedEnv });
+require("./utils/phonepeCompat").ensurePlainToClass();
 try {
   const parsed = dotenv.parse(fs.readFileSync(loadedEnv));
   if (parsed.MAIL_USER) process.env.MAIL_USER = parsed.MAIL_USER;

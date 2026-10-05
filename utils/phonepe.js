@@ -1,3 +1,5 @@
+require("./phonepeCompat").ensurePlainToClass();
+
 const {
   StandardCheckoutClient,
   Env,
