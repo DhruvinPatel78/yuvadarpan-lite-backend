@@ -45,6 +45,7 @@ const {
   recordActivityMany,
   inferUserAction,
 } = require("../utils/activityLog");
+const { enrichUserLocation } = require("../utils/userLocation");
 
 const createUniqueOtp = async () => {
   for (let attempt = 0; attempt < 8; attempt += 1) {
@@ -159,9 +160,14 @@ router.get("/getInfo/:id", async (req, res) => {
   }
   delete user.password;
   delete user.fcmToken;
-  user.id = user._id;
+  const mongoId = user._id;
+  user.id = mongoId;
   delete user._id;
-  res.status(200).json(user);
+  const { user: withLocation, patch } = await enrichUserLocation(user);
+  if (Object.keys(patch).length && mongoId) {
+    await User.updateOne({ _id: mongoId }, { $set: patch });
+  }
+  res.status(200).json(withLocation);
 });
 
 router.get("/me", async (req, res) => {
@@ -174,7 +180,11 @@ router.get("/me", async (req, res) => {
     delete safeUser.password;
     safeUser.id = user._id || user.id;
     delete safeUser._id;
-    res.status(200).json(safeUser);
+    const { user: withLocation, patch } = await enrichUserLocation(safeUser);
+    if (Object.keys(patch).length && user._id) {
+      await User.updateOne({ _id: user._id }, { $set: patch });
+    }
+    res.status(200).json(withLocation);
   }
 });
 
@@ -601,8 +611,9 @@ router.post("/add", async (req, res) => {
         return res.status(403).json({ message: appMessages.notAllowed });
       }
     }
+    const { user: withLocation } = await enrichUserLocation(user);
     const dbUser = await User.create({
-      ...user,
+      ...withLocation,
       id: uuidv4().replace(/-/g, ""),
       createdAt: new Date(),
       updatedAt: null,
@@ -662,8 +673,9 @@ router.post("/signup", async (req, res) => {
 
     res.status(401).json({ message: errorMessage });
   } else {
+    const { user: withLocation } = await enrichUserLocation(user);
     const dbUser = await User.create({
-      ...user,
+      ...withLocation,
       id: uuidv4().replace(/-/g, ""),
       createdAt: new Date(),
       updatedAt: null,
