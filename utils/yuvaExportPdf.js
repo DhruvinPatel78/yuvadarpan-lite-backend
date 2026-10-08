@@ -70,9 +70,21 @@ const FONT_FILES = [
   FONT_LATIN_SEMI,
 ];
 
+// ISO A4 in PDF points (1pt = 1/72in)
 const PAGE_W = 595.28;
 const PAGE_H = 841.89;
-const PER_PAGE = 7;
+/** Readable layout: taller rows + larger type (uses page height, less truncation). */
+const STATS_H = 44;
+const BAND_H = 20;
+const PHOTO_PAD = 1;
+const TARGET_ROW_H = STATS_H + BAND_H * 3; // 104
+const TABLE_HEADER_H = 22;
+const PAGE_BOTTOM = 10;
+
+const rowsPerPageFor = (headerY) => {
+  const available = PAGE_H - PAGE_BOTTOM - headerY - TABLE_HEADER_H;
+  return Math.max(1, Math.floor(available / TARGET_ROW_H));
+};
 
 const C = {
   page: "#FFF8F1",
@@ -81,8 +93,8 @@ const C = {
   name: "#D2652A",
   gold: "#F3A24A",
   goldDeep: "#C56A22",
-  border: "#E39B4E",
-  line: "#F0C48A",
+  border: "#C56A22",
+  line: "#E39B4E",
   ink: "#4A342C",
   label: "#C4452D",
   cream: "#FFF8F2",
@@ -270,17 +282,17 @@ const drawHeader = (doc, { copy, title, samaj, pageNo, year }) => {
 };
 
 const columnLayout = (copy) => {
-  const x = 12;
-  const width = PAGE_W - 24;
+  const x = 10;
+  const width = PAGE_W - 20;
   const fixed = [
-    { key: "no", width: 22, header: copy.cols.no },
-    { key: "photo", width: 58, header: copy.cols.photo },
-    { key: "name", width: 176, header: copy.cols.name },
-    { key: "place", width: 62, header: copy.cols.birth },
-    { key: "when", width: 62, header: copy.cols.when },
-    { key: "study", width: 70, header: copy.cols.study },
-    { key: "weight", width: 38, header: copy.cols.weight },
-    { key: "height", width: 42, header: copy.cols.height },
+    { key: "no", width: 20, header: copy.cols.no },
+    { key: "photo", width: 100, header: copy.cols.photo },
+    { key: "name", width: 150, header: copy.cols.name },
+    { key: "place", width: 52, header: copy.cols.birth },
+    { key: "when", width: 72, header: copy.cols.when },
+    { key: "study", width: 74, header: copy.cols.study },
+    { key: "weight", width: 36, header: copy.cols.weight },
+    { key: "height", width: 36, header: copy.cols.height },
   ];
   const used = fixed.reduce((sum, column) => sum + column.width, 0);
   const columns = [
@@ -301,7 +313,7 @@ const drawCellText = (doc, text, x, y, w, h, options = {}) => {
     return;
   }
   const weight = options.font || "regular";
-  const size = options.size || 6.5;
+  const size = options.size || 9;
   const color = options.color || C.ink;
   const script = primaryScript(value);
   if (script !== "mixed") {
@@ -349,90 +361,103 @@ const drawLabeledLine = (doc, label, value, x, y, w) => {
     return;
   }
   const prefix = `${label} : `;
-  doc.font(fontName("bold", primaryScript(prefix))).fontSize(6.4).fillColor(C.label);
-  const prefixWidth = Math.min(doc.widthOfString(prefix) + 1, w * 0.62);
+  doc.font(fontName("bold", primaryScript(prefix))).fontSize(9).fillColor(C.label);
+  const prefixWidth = Math.min(doc.widthOfString(prefix) + 1, w * 0.55);
   doc.text(prefix, x, y, { width: prefixWidth, lineBreak: false });
-  drawCellText(doc, text, x + prefixWidth, y, Math.max(8, w - prefixWidth), 10, {
-    size: 6.4,
+  drawCellText(doc, text, x + prefixWidth, y, Math.max(10, w - prefixWidth), 12, {
+    size: 9,
     color: C.ink,
   });
 };
 
 const drawPhoto = (doc, image, x, y, w, h, initial) => {
   doc.save();
-  doc.roundedRect(x, y, w, h, 2).clip();
+  doc.rect(x, y, w, h).clip();
   if (image) {
     try {
-      doc.image(image, x, y, { fit: [w, h], align: "center", valign: "center" });
+      // Cover the full photo cell (crop overflow) — no letterbox gaps
+      doc.image(image, x, y, { cover: [w, h], align: "center", valign: "center" });
     } catch (error) {
       doc.rect(x, y, w, h).fill(C.photo);
     }
   } else {
     doc.rect(x, y, w, h).fill(C.photo);
-    doc.fillColor(C.maroon).font(fontName("bold", primaryScript(initial || "•"))).fontSize(11);
-    doc.text(initial || "•", x, y + h / 2 - 6, { width: w, align: "center", lineBreak: false });
+    doc.fillColor(C.maroon).font(fontName("bold", primaryScript(initial || "•"))).fontSize(18);
+    doc.text(initial || "•", x, y + h / 2 - 10, { width: w, align: "center", lineBreak: false });
   }
   doc.restore();
-  doc.roundedRect(x, y, w, h, 2).lineWidth(0.7).strokeColor(C.border).stroke();
+  doc.rect(x, y, w, h).lineWidth(0.7).strokeColor(C.border).stroke();
 };
 
 const dash = (value) => (String(value || "").trim() ? value : "—");
 
 const currentLine = (row) => [row.city, row.native].filter(Boolean).join(" / ");
 
+/** Single line: "Mama Name (city / native)" */
+const mamaLine = (row) => {
+  const name = String(row.mamaName || "").trim();
+  const place = [row.mamaCity, row.mamaNative].filter(Boolean).join(" / ");
+  if (name && place) return `${name} (${place})`;
+  return name || place;
+};
+
+const strokeRect = (doc, x, y, w, h, color, lineWidth = 1) => {
+  doc
+    .lineWidth(lineWidth)
+    .strokeColor(color)
+    .moveTo(x, y)
+    .lineTo(x + w, y)
+    .lineTo(x + w, y + h)
+    .lineTo(x, y + h)
+    .lineTo(x, y)
+    .stroke();
+};
+
 const drawProfileRow = (doc, row, image, columns, rowY, rowH, serial, copy) => {
   const byKey = Object.fromEntries(columns.map((column) => [column.key, column]));
-  const statsH = Math.min(44, rowH * 0.42);
-  const bandH = (rowH - statsH) / 3;
-  const detailsX = byKey.place.x;
+  const statsH = STATS_H;
+  const bandH = BAND_H;
+  const tableX = columns[0].x;
   const tableW = columns.reduce((sum, column) => sum + column.width, 0);
-  const detailsW = columns[0].x + tableW - detailsX;
-  const statKeys = new Set(["when", "study", "weight", "height", "blood"]);
+  const tableRight = tableX + tableW;
+  const detailsX = byKey.place.x;
+  const detailsW = tableRight - detailsX;
+  const statKeys = new Set(["place", "when", "study", "weight", "height", "blood"]);
+  const lineGap = 12.5;
+  const mamaY = rowY + statsH;
+  const currentY = mamaY + bandH;
+  const familyY = currentY + bandH;
+  const bandTextY = (top) => top + 4.5;
 
+  // Fills first
   doc.save();
-  doc.rect(detailsX, rowY + statsH + bandH * 2, detailsW, bandH).fill(C.family);
-  doc.rect(columns[0].x, rowY, tableW, rowH).lineWidth(0.7).strokeColor(C.border).stroke();
-  columns.forEach((column, index) => {
-    if (index === 0) {
-      return;
-    }
-    const lineH = statKeys.has(column.key) ? statsH : rowH;
-    doc
-      .moveTo(column.x, rowY)
-      .lineTo(column.x, rowY + lineH)
-      .strokeColor(C.line)
-      .lineWidth(0.55)
-      .stroke();
-  });
-  for (let band = 0; band < 3; band += 1) {
-    const y = rowY + statsH + bandH * band;
-    doc.moveTo(detailsX, y).lineTo(detailsX + detailsW, y).strokeColor(C.line).lineWidth(0.55).stroke();
-  }
+  doc.rect(detailsX, familyY, detailsW, bandH).fill(C.family);
   doc.restore();
 
-  drawCellText(doc, String(serial), byKey.no.x, rowY + rowH / 2 - 5, byKey.no.width, 12, {
+  drawCellText(doc, String(serial), byKey.no.x, rowY + rowH / 2 - 6, byKey.no.width, 14, {
     font: "bold",
-    size: 8,
+    size: 11,
     color: C.maroon,
     align: "center",
   });
 
-  const photoPad = 4;
+  const photoW = byKey.photo.width - PHOTO_PAD * 2;
+  const photoH = rowH - PHOTO_PAD * 2;
   drawPhoto(
     doc,
     image,
-    byKey.photo.x + photoPad,
-    rowY + photoPad,
-    byKey.photo.width - photoPad * 2,
-    rowH - photoPad * 2,
+    byKey.photo.x + PHOTO_PAD,
+    rowY + PHOTO_PAD,
+    photoW,
+    photoH,
     String(row.fullName || "").trim().charAt(0)
   );
 
   const nameX = byKey.name.x + 4;
   const nameW = byKey.name.width - 8;
-  drawCellText(doc, row.profileName || row.fullName, nameX, rowY + 3, nameW, 16, {
+  drawCellText(doc, row.profileName || row.fullName, nameX, rowY + 5, nameW, 14, {
     font: "semibold",
-    size: 7.5,
+    size: 10.5,
     color: C.name,
   });
   const nameLines = [
@@ -442,132 +467,161 @@ const drawProfileRow = (doc, row, image, columns, rowY, rowH, serial, copy) => {
     [copy.firmAddress, row.firmAddress],
   ].filter(([, value]) => String(value || "").trim());
   nameLines.forEach(([label, value], index) => {
-    const lineY = rowY + 20 + index * 9;
-    if (lineY > rowY + rowH - 18) return;
+    const lineY = rowY + 22 + index * lineGap;
+    if (lineY > rowY + rowH - 16) return;
     drawLabeledLine(doc, label, value, nameX, lineY, nameW);
   });
   const contactValue = [row.contactName, row.phone].filter(Boolean).join(" : ");
-  drawLabeledLine(doc, copy.contact, contactValue, nameX, rowY + rowH - 12, nameW);
+  drawLabeledLine(doc, copy.contact, contactValue, nameX, rowY + rowH - 15, nameW);
 
-  const statY = rowY + 4;
-  const statH = statsH - 6;
-  drawCellText(doc, row.pob, byKey.place.x + 3, statY, byKey.place.width - 6, statH, { size: 6.3 });
-  drawCellText(doc, [row.dobDate, row.dobTime].filter(Boolean).join("\n"), byKey.when.x + 3, statY, byKey.when.width - 6, statH, {
-    size: 6.3,
+  // Stats: 2-line wrap for date/education so values stay readable
+  const statY = rowY + 6;
+  const statH = statsH - 10;
+  drawCellText(doc, row.pob, byKey.place.x + 2, statY, byKey.place.width - 4, statH, {
+    size: 9,
     align: "center",
   });
   drawCellText(
     doc,
-    [row.studyLine, row.activity].filter(Boolean).join("\n"),
-    byKey.study.x + 3,
+    [row.dobDate, row.dobTime].filter(Boolean).join("\n"),
+    byKey.when.x + 2,
     statY,
-    byKey.study.width - 6,
+    byKey.when.width - 4,
     statH,
-    { size: 6.3, align: "center" }
+    { size: 8.5, align: "center" }
+  );
+  drawCellText(
+    doc,
+    [row.studyLine, row.activity].filter(Boolean).join("\n"),
+    byKey.study.x + 2,
+    statY,
+    byKey.study.width - 4,
+    statH,
+    { size: 8.5, align: "center" }
   );
   [
     ["weight", row.weight],
     ["height", row.height],
     ["blood", row.bloodGroup],
   ].forEach(([key, value]) => {
-    drawCellText(doc, dash(value), byKey[key].x + 1, rowY + 14, byKey[key].width - 2, 16, {
+    drawCellText(doc, dash(value), byKey[key].x + 1, rowY + statsH / 2 - 6, byKey[key].width - 2, 14, {
       font: "semibold",
-      size: 7,
+      size: 10,
       align: "center",
       color: C.ink,
     });
   });
 
-  const mamaTop = rowY + statsH + 2;
-  drawLabeledLine(doc, copy.mama, row.mamaName, detailsX + 4, mamaTop, detailsW - 8);
-  const mamaPlace = [row.mamaCity, row.mamaNative].filter(Boolean).join(" / ");
-  if (mamaPlace) {
-    drawCellText(doc, mamaPlace, detailsX + 4, mamaTop + 9, detailsW - 8, 10, { size: 6.2 });
-  }
+  drawLabeledLine(doc, copy.mama, mamaLine(row), detailsX + 4, bandTextY(mamaY), detailsW - 8);
   drawLabeledLine(
     doc,
     copy.current,
     currentLine(row),
     detailsX + 4,
-    rowY + statsH + bandH + 3,
+    bandTextY(currentY),
     detailsW - 8
   );
-  const familyY = rowY + statsH + bandH * 2 + 3;
+
   const yskNo = String(row.yskNo || "").trim();
   let yskReserve = 0;
   if (yskNo) {
     const yskLabel = `${copy.ysk} : `;
-    doc.font(fontName("bold", "en")).fontSize(6.5);
+    doc.font(fontName("bold", "en")).fontSize(9);
     const yskLabelW = doc.widthOfString(yskLabel);
-    doc.font(fontName("bold", primaryScript(yskNo))).fontSize(7.5);
+    doc.font(fontName("bold", primaryScript(yskNo))).fontSize(10);
     const yskValueW = doc.widthOfString(yskNo);
     yskReserve = yskLabelW + yskValueW + 10;
-    const yskX = detailsX + detailsW - 4 - yskLabelW - yskValueW;
-    doc.fillColor(C.goldDeep).font(fontName("bold", "en")).fontSize(6.5);
-    doc.text(yskLabel, yskX, familyY, { lineBreak: false });
-    drawCellText(doc, yskNo, yskX + yskLabelW, familyY, yskValueW + 2, 10, {
+    const yskX = Math.max(detailsX + 8, tableRight - 4 - yskLabelW - yskValueW);
+    doc.fillColor(C.goldDeep).font(fontName("bold", "en")).fontSize(9);
+    doc.text(yskLabel, yskX, bandTextY(familyY), { lineBreak: false });
+    drawCellText(doc, yskNo, yskX + yskLabelW, bandTextY(familyY), yskValueW + 2, 12, {
       font: "bold",
-      size: 7.5,
+      size: 10,
       color: C.maroon,
     });
   }
   const familyLabel = `${copy.family} : `;
-  doc.font(fontName("bold", primaryScript(familyLabel))).fontSize(6.5).fillColor(C.goldDeep);
+  doc.font(fontName("bold", primaryScript(familyLabel))).fontSize(9).fillColor(C.goldDeep);
   const familyLabelW = doc.widthOfString(familyLabel);
-  doc.text(familyLabel, detailsX + 4, familyY, { lineBreak: false });
+  doc.text(familyLabel, detailsX + 4, bandTextY(familyY), { lineBreak: false });
   drawCellText(
     doc,
     row.familyId,
     detailsX + 4 + familyLabelW,
-    familyY,
-    Math.max(20, detailsW - familyLabelW - yskReserve - 10),
-    10,
+    bandTextY(familyY),
+    Math.max(20, detailsW - familyLabelW - yskReserve - 8),
+    12,
     {
       font: "bold",
-      size: 7.5,
+      size: 10,
       color: C.maroon,
     }
   );
+
+  // Borders last so nothing covers left/right/top/bottom edges
+  doc.save();
+  columns.forEach((column, index) => {
+    if (index === 0) return;
+    // Name|details divider runs full row; other stats dividers only through stats band
+    const lineH = column.key === "place" || !statKeys.has(column.key) ? rowH : statsH;
+    doc
+      .moveTo(column.x, rowY)
+      .lineTo(column.x, rowY + lineH)
+      .strokeColor(C.line)
+      .lineWidth(0.7)
+      .stroke();
+  });
+  [mamaY, currentY, familyY].forEach((y) => {
+    doc
+      .moveTo(detailsX, y)
+      .lineTo(tableRight, y)
+      .strokeColor(C.line)
+      .lineWidth(0.7)
+      .stroke();
+  });
+  // Outer box — explicit path so left AND right edges always render
+  strokeRect(doc, tableX, rowY, tableW, rowH, C.border, 1.15);
+  doc.restore();
 };
 
 const drawTableHeader = (doc, columns, y, height) => {
   const width = columns.reduce((sum, column) => sum + column.width, 0);
+  const tableX = columns[0].x;
   doc.save();
-  doc.rect(columns[0].x, y, width, height).fill(C.gold);
+  doc.rect(tableX, y, width, height).fill(C.gold);
   columns.forEach((column, index) => {
     if (index > 0) {
       doc
         .moveTo(column.x, y)
         .lineTo(column.x, y + height)
         .strokeColor("#E7B56A")
-        .lineWidth(0.4)
+        .lineWidth(0.7)
         .stroke();
     }
-    drawCellText(doc, column.header, column.x + 1, y + 3, column.width - 2, height - 4, {
+    drawCellText(doc, column.header, column.x + 1, y + 5, column.width - 2, height - 6, {
       font: "bold",
-      size: 6,
+      size: 9,
       color: C.headerInk,
       align: "center",
     });
   });
-  doc.rect(columns[0].x, y, width, height).lineWidth(0.8).strokeColor(C.goldDeep).stroke();
+  strokeRect(doc, tableX, y, width, height, C.goldDeep, 1.15);
   doc.restore();
 };
 
 const drawPage = (doc, { copy, title, samaj, pageNo, year, columns, rows, images, startSerial }) => {
   drawHeader(doc, { copy, title, samaj, pageNo, year });
-  const headerY = samaj ? 64 : 58;
-  const headerH = 18;
-  const tableBottom = PAGE_H - 12;
-  const rowH = (tableBottom - headerY - headerH) / PER_PAGE;
-  drawTableHeader(doc, columns, headerY, headerH);
+  const headerY = samaj ? 60 : 54;
+  // Fixed row height (= photo height). Do not stretch rows to fill the page.
+  const rowH = TARGET_ROW_H;
+  drawTableHeader(doc, columns, headerY, TABLE_HEADER_H);
   rows.forEach((row, index) => {
     drawProfileRow(
       doc,
       row,
       images[index],
       columns,
-      headerY + headerH + rowH * index,
+      headerY + TABLE_HEADER_H + rowH * index,
       rowH,
       startSerial + index,
       copy
@@ -582,7 +636,7 @@ const renderYuvaPdf = (rows, language, loadPhoto) =>
     const year = new Date().getFullYear();
     const chunks = [];
     const doc = new PDFDocument({
-      size: "A4",
+      size: [PAGE_W, PAGE_H],
       margin: 0,
       autoFirstPage: false,
       info: {
@@ -618,7 +672,7 @@ const renderYuvaPdf = (rows, language, loadPhoto) =>
       });
 
       if (!samajKeys.length) {
-        doc.addPage({ size: "A4", margin: 0 });
+        doc.addPage({ size: [PAGE_W, PAGE_H], margin: 0 });
         drawHeader(doc, { copy, title: "", pageNo: 1, year });
         doc.fillColor(C.ink).font(fontName("regular", primaryScript(copy.empty))).fontSize(12);
         doc.text(copy.empty, 48, 380, { width: PAGE_W - 96, align: "center" });
@@ -628,6 +682,8 @@ const renderYuvaPdf = (rows, language, loadPhoto) =>
       for (const samajKey of samajKeys) {
         const samajRows = rows.filter((row) => (row.samajId || row.samaj || "") === samajKey);
         const samajName = samajRows.find((row) => row.samaj)?.samaj || "";
+        const headerY = samajName ? 60 : 54;
+        const perPage = rowsPerPageFor(headerY);
         let pageNo = 1;
         for (const kind of ["female", "male", "other"]) {
           const kindRows = samajRows.filter((row) => row.kind === kind);
@@ -635,9 +691,9 @@ const renderYuvaPdf = (rows, language, loadPhoto) =>
             continue;
           }
           let serial = 1;
-          for (const pageRows of chunk(kindRows, PER_PAGE)) {
+          for (const pageRows of chunk(kindRows, perPage)) {
             const images = await Promise.all(pageRows.map((row) => loadPhoto(row.photoUrl)));
-            doc.addPage({ size: "A4", margin: 0 });
+            doc.addPage({ size: [PAGE_W, PAGE_H], margin: 0 });
             try {
               drawPage(doc, {
                 copy,
