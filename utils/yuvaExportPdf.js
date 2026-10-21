@@ -355,7 +355,7 @@ const drawCellText = (doc, text, x, y, w, h, options = {}) => {
   });
 };
 
-const drawLabeledLine = (doc, label, value, x, y, w) => {
+const drawLabeledLine = (doc, label, value, x, y, w, h = 12) => {
   const text = String(value || "").trim();
   if (!text) {
     return;
@@ -364,7 +364,7 @@ const drawLabeledLine = (doc, label, value, x, y, w) => {
   doc.font(fontName("bold", primaryScript(prefix))).fontSize(9).fillColor(C.label);
   const prefixWidth = Math.min(doc.widthOfString(prefix) + 1, w * 0.55);
   doc.text(prefix, x, y, { width: prefixWidth, lineBreak: false });
-  drawCellText(doc, text, x + prefixWidth, y, Math.max(10, w - prefixWidth), 12, {
+  drawCellText(doc, text, x + prefixWidth, y, Math.max(10, w - prefixWidth), h, {
     size: 9,
     color: C.ink,
   });
@@ -472,7 +472,19 @@ const drawProfileRow = (doc, row, image, columns, rowY, rowH, serial, copy) => {
     drawLabeledLine(doc, label, value, nameX, lineY, nameW);
   });
   const contactValue = [row.contactName, row.phone].filter(Boolean).join(" : ");
-  drawLabeledLine(doc, copy.contact, contactValue, nameX, rowY + rowH - 15, nameW);
+  let contactY = rowY + rowH - 15;
+  let contactH = 12;
+  if (contactValue) {
+    const contactPrefix = `${copy.contact} : `;
+    doc.font(fontName("bold", primaryScript(contactPrefix))).fontSize(9);
+    const contactPrefixW = Math.min(doc.widthOfString(contactPrefix) + 1, nameW * 0.55);
+    doc.font(fontName("regular", primaryScript(contactValue))).fontSize(9);
+    if (doc.widthOfString(contactValue) > Math.max(10, nameW - contactPrefixW)) {
+      contactY -= 12;
+      contactH = 24;
+    }
+  }
+  drawLabeledLine(doc, copy.contact, contactValue, nameX, contactY, nameW, contactH);
 
   // Stats: 2-line wrap for date/education so values stay readable
   const statY = rowY + 6;
