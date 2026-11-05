@@ -10,6 +10,7 @@ const Region = require("../models/region");
 const { v4: uuidv4 } = require("uuid");
 const { sendNotification } = require("../utils/fcm");
 const { notifyAccountEvent, notifyStatusChange } = require("../utils/accountMail");
+const { notifyStaffEvent } = require("../utils/notifyStaff");
 const appMessages = require("../utils/appMessages");
 const notification = require("../data/locale/notifications.json");
 const { escapeRegex } = require("../utils/escapeRegex");
@@ -628,6 +629,13 @@ router.post("/add", async (req, res) => {
       dbUser,
       isAdmin ? "AccountVerifySuccess" : "RegistrationSuccess",
     );
+    notifyStaffEvent({
+      kind: isAdmin || dbUser.allowed ? "NewUserAdded" : "NewSignupRequest",
+      subject: dbUser,
+      subjectKind: "user",
+      excludeIds: [req.user?.id, req.user?._id],
+      data: { path: dbUser.allowed ? "/userlist" : "/request" },
+    });
     await recordActivity({
       req,
       action: "create",
@@ -688,6 +696,12 @@ router.post("/signup", async (req, res) => {
         language: user.language === "en" ? "en" : "gu",
     });
     await notifyAccountEvent(dbUser, "RegistrationSuccess");
+    notifyStaffEvent({
+      kind: "NewSignupRequest",
+      subject: dbUser,
+      subjectKind: "user",
+      data: { path: "/request" },
+    });
     res.send(dbUser);
   }
 });

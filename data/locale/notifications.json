@@ -214,5 +214,35 @@
       "en": "Account already exists",
       "gu": "એકાઉન્ટ પહેલેથી જ છે"
     }
+  },
+  "NewSignupRequest": {
+    "title": {
+      "en": "New signup request",
+      "gu": "નવી સાઇનઅપ વિનંતી"
+    },
+    "body": {
+      "en": "{{name}} requested account approval.",
+      "gu": "{{name}} એ એકાઉન્ટ મંજૂરીની વિનંતી કરી છે."
+    }
+  },
+  "NewUserAdded": {
+    "title": {
+      "en": "New user added",
+      "gu": "નવો વપરાશકર્તા ઉમેરાયો"
+    },
+    "body": {
+      "en": "{{name}} was added to Yuvadarpan.",
+      "gu": "{{name}} ને યુવાદર્પણમાં ઉમેરવામાં આવ્યા છે."
+    }
+  },
+  "NewYuvaAdded": {
+    "title": {
+      "en": "New Yuva added",
+      "gu": "નવું યુવા ઉમેરાયું"
+    },
+    "body": {
+      "en": "{{name}} was added to the Yuva list.",
+      "gu": "{{name}} ને યુવા યાદીમાં ઉમેરવામાં આવ્યા છે."
+    }
   }
 }
