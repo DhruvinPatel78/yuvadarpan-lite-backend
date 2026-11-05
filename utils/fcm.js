@@ -27,7 +27,13 @@ if (!admin.apps.length) {
   });
 }
 
-function sendNotification(token, title, body) {
+function sendNotification(token, title, body, data = {}) {
+  const extraData = Object.fromEntries(
+    Object.entries({
+      iconType: "ic_notification",
+      ...data,
+    }).map(([key, value]) => [key, value == null ? "" : String(value)]),
+  );
   const message = {
     notification: {
       title,
@@ -49,9 +55,16 @@ function sendNotification(token, title, body) {
         },
       },
     },
-    data: {
-      iconType: "ic_notification",
+    webpush: {
+      notification: {
+        icon: "/apple-touch-icon.png",
+        badge: "/logo.svg",
+      },
+      fcmOptions: {
+        link: data.path || "/",
+      },
     },
+    data: extraData,
     token,
   };
   return admin.messaging().send(message);

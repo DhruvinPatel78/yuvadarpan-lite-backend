@@ -33,6 +33,7 @@ const { attachLinkedRoute } = require("../utils/linkedRecords");
 const { recordActivity, recordActivityMany } = require("../utils/activityLog");
 const { prepareYuvaRecord, withEnGu, omitGu } = require("../utils/yuvaGu");
 const { exportYuvaList } = require("../utils/yuvaExport");
+const { notifyStaffEvent } = require("../utils/notifyStaff");
 
 const dropStoredGu = async (docs = []) => {
   const ids = docs.map((doc) => doc?._id).filter(Boolean);
@@ -527,6 +528,15 @@ router.post("/addYuvaList", async (req, res) => {
       const created = await Yuvalist.insertMany(docs);
       await dropStoredGu(created);
       recordActivityMany(req, "create", "yuva", created).catch(() => {});
+      created.slice(0, 5).forEach((row) => {
+        notifyStaffEvent({
+          kind: "NewYuvaAdded",
+          subject: row,
+          subjectKind: "yuva",
+          excludeIds: [user.id, user._id],
+          data: { path: "/yuvalist" },
+        });
+      });
       return res.status(200).json({ data: created.map(withEnGu), count: created.length });
     }
     const created = await Yuvalist.create(docs[0]);
@@ -538,6 +548,13 @@ router.post("/addYuvaList", async (req, res) => {
       entity: created,
       next: created,
     }).catch(() => {});
+    notifyStaffEvent({
+      kind: "NewYuvaAdded",
+      subject: created,
+      subjectKind: "yuva",
+      excludeIds: [user.id, user._id],
+      data: { path: "/yuvalist" },
+    });
     const plain =
       typeof created.toObject === "function"
         ? created.toObject({ depopulate: true })
