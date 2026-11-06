@@ -1,6 +1,7 @@
 const Country = require("../models/country");
 const State = require("../models/state");
 const Region = require("../models/region");
+const Vibhag = require("../models/vibhag");
 const District = require("../models/district");
 const City = require("../models/city");
 const Samaj = require("../models/samaj");
@@ -200,12 +201,42 @@ const getStateLinks = async (ids) => {
 
 const getRegionLinks = async (ids) => {
   const regionKeys = await collectKeys(Region, ids);
-  const [districts, cities, samajs, users, yuvas] = await Promise.all([
+  const [vibhags, districts, cities, samajs, users, yuvas] = await Promise.all([
+    findByField(Vibhag, "region_id", regionKeys),
     findByField(District, "region_id", regionKeys),
     findByField(City, "region_id", regionKeys),
     findByField(Samaj, "region_id", regionKeys),
     findByField(User, "region", regionKeys, {}, PERSON_SELECT),
     findByAnyField(Yuvalist, ["region"], regionKeys, {}, PERSON_SELECT),
+  ]);
+  const { users: samajUsers, yuvas: samajYuvas } = await usersAndYuvasBySamaj(
+    docKeys(samajs),
+  );
+  const usersById = new Map();
+  [...users, ...samajUsers].forEach((user) => {
+    usersById.set(String(user._id || user.id), user);
+  });
+  const yuvasById = new Map();
+  [...yuvas, ...samajYuvas].forEach((yuva) => {
+    yuvasById.set(String(yuva._id || yuva.id), yuva);
+  });
+  return [
+    ...peopleGroups([...usersById.values()], [...yuvasById.values()]),
+    group("vibhags", "Vibhag", vibhags, toPlaceItems),
+    group("districts", "District", districts, toPlaceItems),
+    group("cities", "City", cities, toPlaceItems),
+    group("samajs", "Samaj", samajs, toPlaceItems),
+  ];
+};
+
+const getVibhagLinks = async (ids) => {
+  const vibhagKeys = await collectKeys(Vibhag, ids);
+  const [districts, cities, samajs, users, yuvas] = await Promise.all([
+    findByField(District, "vibhag_id", vibhagKeys),
+    findByField(City, "vibhag_id", vibhagKeys),
+    findByField(Samaj, "vibhag_id", vibhagKeys),
+    findByField(User, "vibhag", vibhagKeys, {}, PERSON_SELECT),
+    findByAnyField(Yuvalist, ["vibhag"], vibhagKeys, {}, PERSON_SELECT),
   ]);
   const { users: samajUsers, yuvas: samajYuvas } = await usersAndYuvasBySamaj(
     docKeys(samajs),
@@ -361,6 +392,7 @@ const HANDLERS = {
   country: getCountryLinks,
   state: getStateLinks,
   region: getRegionLinks,
+  vibhag: getVibhagLinks,
   district: getDistrictLinks,
   city: getCityLinks,
   samaj: getSamajLinks,

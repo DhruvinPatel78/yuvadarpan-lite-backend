@@ -3,7 +3,7 @@ const router = express.Router();
 const Region = require("../models/region");
 const State = require("../models/state");
 const Country = require("../models/country");
-const District = require("../models/district");
+const Vibhag = require("../models/vibhag");
 const {
   attachChildCounts,
   findChildrenByParent,
@@ -17,6 +17,7 @@ const {
   rejectSamajManagerWrite,
   isCityManager,
   isDistrictManager,
+  isVibhagManager,
   isRegionManager,
   isStateManager,
   isCountryManager,
@@ -66,9 +67,9 @@ router.get("/list", async (req, res) => {
   const Regions = await Region.find(filter).skip(offset).limit(limit).exec();
   const data = await attachChildCounts(
     Regions,
-    District,
+    Vibhag,
     "region_id",
-    "districtCount"
+    "vibhagCount"
   );
   const totalItems = await Region.countDocuments(filter);
   const totalPages = Math.ceil(totalItems / limit);
@@ -101,9 +102,9 @@ router.get("/list/:id", async (req, res) => {
   );
   const data = await attachChildCounts(
     RegionData,
-    District,
+    Vibhag,
     "region_id",
-    "districtCount"
+    "vibhagCount"
   );
   res.status(200).json(data);
 });
@@ -116,6 +117,7 @@ router.post("/add", async (req, res) => {
   if (
     isCityManager(req.user?.role) ||
     isDistrictManager(req.user?.role) ||
+    isVibhagManager(req.user?.role) ||
     isRegionManager(req.user?.role)
   ) {
     return res.status(403).json({ message: "You cannot do this." });
@@ -172,6 +174,7 @@ router.delete("/delete", async (req, res) => {
   if (
     isCityManager(req.user?.role) ||
     isDistrictManager(req.user?.role) ||
+    isVibhagManager(req.user?.role) ||
     isRegionManager(req.user?.role)
   ) {
     return res.status(403).json({ message: "You cannot do this." });
@@ -210,6 +213,7 @@ router.patch("/update/:id", async (req, res) => {
   if (
     isCityManager(req.user?.role) ||
     isDistrictManager(req.user?.role) ||
+    isVibhagManager(req.user?.role) ||
     isRegionManager(req.user?.role)
   ) {
     return res.status(403).json({ message: "You cannot do this." });

@@ -3,6 +3,7 @@ const User = require("../models/user");
 const Samaj = require("../models/samaj");
 const City = require("../models/city");
 const District = require("../models/district");
+const Vibhag = require("../models/vibhag");
 const Region = require("../models/region");
 const State = require("../models/state");
 const Country = require("../models/country");
@@ -19,6 +20,9 @@ const isCityManager = (role) =>
 const isDistrictManager = (role) =>
   String(role || "").toUpperCase() === "DISTRICT_MANAGER";
 
+const isVibhagManager = (role) =>
+  String(role || "").toUpperCase() === "VIBHAG_MANAGER";
+
 const isRegionManager = (role) =>
   String(role || "").toUpperCase() === "REGION_MANAGER";
 
@@ -32,6 +36,7 @@ const isLocationMasterReadOnly = (role) =>
   isSamajManager(role) ||
   isCityManager(role) ||
   isDistrictManager(role) ||
+  isVibhagManager(role) ||
   isRegionManager(role) ||
   isStateManager(role) ||
   isCountryManager(role);
@@ -175,6 +180,9 @@ const isOwnDistrictQuery = (query) =>
   query?.ownDistrict === true ||
   String(query?.ownDistrict).toLowerCase() === "true";
 
+const isOwnVibhagQuery = (query) =>
+  query?.ownVibhag === true || String(query?.ownVibhag).toLowerCase() === "true";
+
 const isOwnRegionQuery = (query) =>
   query?.ownRegion === true || String(query?.ownRegion).toLowerCase() === "true";
 
@@ -194,6 +202,8 @@ const collectIds = (docs) => [
 ];
 
 const districtValueKeys = (districtId) => entityValueKeys(District, districtId);
+
+const vibhagValueKeys = (vibhagId) => entityValueKeys(Vibhag, vibhagId);
 
 const regionValueKeys = (regionId) => entityValueKeys(Region, regionId);
 
@@ -298,6 +308,124 @@ const recordsInManagerDistrictQuery = async (manager) => {
   return { $or: clauses };
 };
 
+const getManagerVibhagId = async (manager) => {
+  if (!manager) {
+    return null;
+  }
+  if (manager.vibhag) {
+    return manager.vibhag;
+  }
+  if (manager.localSamaj) {
+    const samaj = await Samaj.findOne(
+      idOrObjectIdFilter(String(manager.localSamaj))
+    );
+    if (samaj?.vibhag_id) {
+      return samaj.vibhag_id;
+    }
+    if (samaj?.district_id) {
+      const district = await District.findOne(
+        idOrObjectIdFilter(String(samaj.district_id))
+      );
+      if (district?.vibhag_id) {
+        return district.vibhag_id;
+      }
+    }
+  }
+  if (manager.district) {
+    const district = await District.findOne(
+      idOrObjectIdFilter(String(manager.district))
+    );
+    return district?.vibhag_id || null;
+  }
+  return null;
+};
+
+const districtIdsForVibhag = async (vibhagId) => {
+  const vibhagKeys = await vibhagValueKeys(vibhagId);
+  if (!vibhagKeys.length) {
+    return [];
+  }
+  const districts = await District.find({
+    vibhag_id: { $in: vibhagKeys },
+  }).lean();
+  return collectIds(districts);
+};
+
+const cityIdsForVibhag = async (vibhagId) => {
+  const vibhagKeys = await vibhagValueKeys(vibhagId);
+  const districtIds = await districtIdsForVibhag(vibhagId);
+  const clauses = [];
+  if (vibhagKeys.length) {
+    clauses.push({ vibhag_id: { $in: vibhagKeys } });
+  }
+  if (districtIds.length) {
+    clauses.push({ district_id: { $in: districtIds } });
+  }
+  if (!clauses.length) {
+    return [];
+  }
+  const cities = await City.find(
+    clauses.length === 1 ? clauses[0] : { $or: clauses }
+  ).lean();
+  return collectIds(cities);
+};
+
+const samajIdsForVibhag = async (vibhagId) => {
+  const vibhagKeys = await vibhagValueKeys(vibhagId);
+  const cityIds = await cityIdsForVibhag(vibhagId);
+  const districtIds = await districtIdsForVibhag(vibhagId);
+  const clauses = [];
+  if (vibhagKeys.length) {
+    clauses.push({ vibhag_id: { $in: vibhagKeys } });
+  }
+  if (districtIds.length) {
+    clauses.push({ district_id: { $in: districtIds } });
+  }
+  if (cityIds.length) {
+    clauses.push({ city_id: { $in: cityIds } });
+  }
+  if (!clauses.length) {
+    return [];
+  }
+  const samajs = await Samaj.find(
+    clauses.length === 1 ? clauses[0] : { $or: clauses }
+  ).lean();
+  return collectIds(samajs);
+};
+
+const usersInManagerVibhagQuery = async (manager) => {
+  const vibhagKeys = await vibhagValueKeys(await getManagerVibhagId(manager));
+  if (!vibhagKeys.length) {
+    return { _id: { $in: [] } };
+  }
+  return { vibhag: { $in: vibhagKeys } };
+};
+
+const recordsInManagerVibhagQuery = async (manager) => {
+  const vibhagId = await getManagerVibhagId(manager);
+  const vibhagKeys = await vibhagValueKeys(vibhagId);
+  const districtKeys = await districtIdsForVibhag(vibhagId);
+  const cityKeys = await cityIdsForVibhag(vibhagId);
+  const samajIds = await samajIdsForVibhag(vibhagId);
+  const clauses = [];
+  if (vibhagKeys.length) {
+    clauses.push({ vibhag: { $in: vibhagKeys } });
+  }
+  if (districtKeys.length) {
+    clauses.push({ district: { $in: districtKeys } });
+  }
+  if (cityKeys.length) {
+    clauses.push({ city: { $in: cityKeys } });
+  }
+  if (samajIds.length) {
+    clauses.push({ localSamaj: { $in: samajIds } });
+  }
+  if (!clauses.length) {
+    return { _id: { $in: [] } };
+  }
+  return { $or: clauses };
+};
+
 const getManagerRegionId = async (manager) => {
   if (!manager) {
     return null;
@@ -319,8 +447,24 @@ const districtIdsForRegion = async (regionId) => {
   if (!regionKeys.length) {
     return [];
   }
-  const districts = await District.find({ region_id: { $in: regionKeys } }).lean();
+  const vibhags = await Vibhag.find({ region_id: { $in: regionKeys } }).lean();
+  const vibhagIds = collectIds(vibhags);
+  const districts = await District.find({
+    $or: [
+      { region_id: { $in: regionKeys } },
+      ...(vibhagIds.length ? [{ vibhag_id: { $in: vibhagIds } }] : []),
+    ],
+  }).lean();
   return collectIds(districts);
+};
+
+const vibhagIdsForRegion = async (regionId) => {
+  const regionKeys = await regionValueKeys(regionId);
+  if (!regionKeys.length) {
+    return [];
+  }
+  const vibhags = await Vibhag.find({ region_id: { $in: regionKeys } }).lean();
+  return collectIds(vibhags);
 };
 
 const cityIdsForRegion = async (regionId) => {
@@ -671,6 +815,9 @@ const getYuvaWriteScopeFilter = async (role, userId) => {
   if (normalized === "DISTRICT_MANAGER") {
     return recordsInManagerDistrictQuery(manager);
   }
+  if (normalized === "VIBHAG_MANAGER") {
+    return recordsInManagerVibhagQuery(manager);
+  }
   if (normalized === "REGION_MANAGER") {
     return recordsInManagerRegionQuery(manager);
   }
@@ -735,12 +882,36 @@ const constrainYuvaLocationForManager = async (user, payload = {}) => {
     }
     return { ok: true, data };
   }
+  if (role === "VIBHAG_MANAGER") {
+    const vibhagId = await getManagerVibhagId(manager);
+    if (!vibhagId) {
+      return { ok: false, status: 403, message: "vibhag-not-assigned" };
+    }
+    data.vibhag = vibhagId;
+    const districtIds = await districtIdsForVibhag(vibhagId);
+    if (data.district && !containsId(districtIds, data.district)) {
+      return { ok: false, status: 403, message: "You cannot do this." };
+    }
+    const cityIds = await cityIdsForVibhag(vibhagId);
+    if (data.city && !containsId(cityIds, data.city)) {
+      return { ok: false, status: 403, message: "You cannot do this." };
+    }
+    const samajIds = await samajIdsForVibhag(vibhagId);
+    if (data.localSamaj && !containsId(samajIds, data.localSamaj)) {
+      return { ok: false, status: 403, message: "You cannot do this." };
+    }
+    return { ok: true, data };
+  }
   if (role === "REGION_MANAGER") {
     const regionId = await getManagerRegionId(manager);
     if (!regionId) {
       return { ok: false, status: 403, message: "region-not-assigned" };
     }
     data.region = regionId;
+    const vibhagIds = await vibhagIdsForRegion(regionId);
+    if (data.vibhag && !containsId(vibhagIds, data.vibhag)) {
+      return { ok: false, status: 403, message: "You cannot do this." };
+    }
     const districtIds = await districtIdsForRegion(regionId);
     if (data.district && !containsId(districtIds, data.district)) {
       return { ok: false, status: 403, message: "You cannot do this." };
@@ -815,17 +986,23 @@ module.exports = {
   samajValueKeys,
   cityValueKeys,
   districtValueKeys,
+  vibhagValueKeys,
   regionValueKeys,
   stateValueKeys,
   countryValueKeys,
   getManagerCityId,
   getManagerDistrictId,
+  getManagerVibhagId,
   getManagerRegionId,
   getManagerStateId,
   getManagerCountryId,
   samajIdsForCity,
   cityIdsForDistrict,
   samajIdsForDistrict,
+  districtIdsForVibhag,
+  cityIdsForVibhag,
+  samajIdsForVibhag,
+  vibhagIdsForRegion,
   districtIdsForRegion,
   cityIdsForRegion,
   samajIdsForRegion,
@@ -842,6 +1019,8 @@ module.exports = {
   recordsInManagerCityQuery,
   usersInManagerDistrictQuery,
   recordsInManagerDistrictQuery,
+  usersInManagerVibhagQuery,
+  recordsInManagerVibhagQuery,
   usersInManagerRegionQuery,
   recordsInManagerRegionQuery,
   usersInManagerStateQuery,
@@ -851,12 +1030,14 @@ module.exports = {
   isOwnSamajQuery,
   isOwnCityQuery,
   isOwnDistrictQuery,
+  isOwnVibhagQuery,
   isOwnRegionQuery,
   isOwnStateQuery,
   isOwnCountryQuery,
   isSamajManager,
   isCityManager,
   isDistrictManager,
+  isVibhagManager,
   isRegionManager,
   isStateManager,
   isCountryManager,

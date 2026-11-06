@@ -19,6 +19,9 @@ const districtSchema = new mongoose.Schema({
     type: String,
     required: true,
   },
+  vibhag_id: {
+    type: String,
+  },
   active: Boolean,
   createdAt: Date,
   updatedAt: Date,
