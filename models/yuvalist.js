@@ -70,13 +70,7 @@ const yuvaListSchema = new mongoose.Schema({
       message: "Mother name is required",
     },
   },
-  firm: {
-    ...langPairRequired,
-    validate: {
-      validator: hasEn,
-      message: "Firm is required",
-    },
-  },
+  firm: langPair,
   firmAddress: {
     ...langPairRequired,
     validate: {
