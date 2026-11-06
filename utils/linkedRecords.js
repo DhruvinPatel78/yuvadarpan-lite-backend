@@ -222,7 +222,7 @@ const getRegionLinks = async (ids) => {
   });
   return [
     ...peopleGroups([...usersById.values()], [...yuvasById.values()]),
-    group("vibhags", "Vibhag", vibhags, toPlaceItems),
+    group("vibhags", "Division", vibhags, toPlaceItems),
     group("districts", "District", districts, toPlaceItems),
     group("cities", "City", cities, toPlaceItems),
     group("samajs", "Samaj", samajs, toPlaceItems),
