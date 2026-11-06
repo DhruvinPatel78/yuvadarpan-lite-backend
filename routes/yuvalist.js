@@ -251,6 +251,13 @@ const buildYuvaListFilter = (query = {}) => {
   if (phoneClause) {
     clauses.push(phoneClause);
   }
+  const selectedIds = toQueryArray(query.ids)
+    .flatMap((item) => String(item).split(","))
+    .map((item) => item.trim())
+    .filter(Boolean);
+  if (selectedIds.length) {
+    clauses.push(idsFilter(selectedIds));
+  }
   const search = String(query.search || query.q || "").trim();
   if (search) {
     const nameClause = containsAny(search, [
