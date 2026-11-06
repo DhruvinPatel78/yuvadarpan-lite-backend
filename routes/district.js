@@ -1,6 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const District = require("../models/district");
+const Vibhag = require("../models/vibhag");
 const Region = require("../models/region");
 const State = require("../models/state");
 const Country = require("../models/country");
@@ -18,17 +19,21 @@ const {
   rejectSamajManagerWrite,
   isCityManager,
   isDistrictManager,
+  isVibhagManager,
   isRegionManager,
   isStateManager,
   isCountryManager,
   getTokenPayload,
   findAccountByTokenId,
+  getManagerVibhagId,
   getManagerRegionId,
   getManagerStateId,
   getManagerCountryId,
+  vibhagValueKeys,
   regionValueKeys,
   stateValueKeys,
   countryValueKeys,
+  isOwnVibhagQuery,
   isOwnRegionQuery,
   isOwnStateQuery,
   isOwnCountryQuery,
@@ -49,14 +54,20 @@ router.get("/list", async (req, res) => {
   const page = parseInt(req.query.page, 10) || 1;
   const limit = parseInt(req.query.limit, 10) || 10;
   const offset = (page - 1) * limit;
-  const { country, state, region, name } = req.query;
+  const { country, state, region, vibhag, name } = req.query;
   const filter = mergeAnd(
     await parentIdFilter("country_id", country, Country),
     await parentIdFilter("state_id", state, State),
     await parentIdFilter("region_id", region, Region),
+    await parentIdFilter("vibhag_id", vibhag, Vibhag),
     nameContains(name)
   );
   const tokenUser = getTokenPayload(req);
+  if (isVibhagManager(tokenUser?.role) && isOwnVibhagQuery(req.query)) {
+    const manager = await findAccountByTokenId(tokenUser?.id);
+    const vibhagKeys = await vibhagValueKeys(await getManagerVibhagId(manager));
+    filter.vibhag_id = { $in: vibhagKeys.length ? vibhagKeys : ["__none__"] };
+  }
   if (isRegionManager(tokenUser?.role) && isOwnRegionQuery(req.query)) {
     const manager = await findAccountByTokenId(tokenUser?.id);
     const regionKeys = await regionValueKeys(await getManagerRegionId(manager));
@@ -90,19 +101,19 @@ router.get("/list", async (req, res) => {
 });
 router.get("/get-all-list", async (req, res) => {
   const Districts = await District.find(
-    await parentIdFilter("region_id", req.query.data, Region)
+    await parentIdFilter("vibhag_id", req.query.data, Vibhag)
   );
   res.status(200).json(Districts);
 });
 
-//  Get districts by region id
+//  Get districts by vibhag id
 router.get("/list/:id", async (req, res) => {
   const { id } = req.params;
   const DistrictData = await findChildrenByParent(
-    Region,
+    Vibhag,
     District,
     id,
-    "region_id"
+    "vibhag_id"
   );
   const data = await attachChildCounts(
     DistrictData,
@@ -131,6 +142,18 @@ router.post("/add", async (req, res) => {
     return res.status(403).json({ message: "You cannot do this." });
   }
   const data = req.body;
+  if (isVibhagManager(req.user?.role)) {
+    const manager = await findAccountByTokenId(req.user.id);
+    const vibhagId = await getManagerVibhagId(manager);
+    const vibhagKeys = await vibhagValueKeys(vibhagId);
+    if (
+      !vibhagId ||
+      (data.vibhag_id && !vibhagKeys.includes(String(data.vibhag_id)))
+    ) {
+      return res.status(403).json({ message: "You cannot do this." });
+    }
+    data.vibhag_id = vibhagId;
+  }
   if (isRegionManager(req.user?.role)) {
     const manager = await findAccountByTokenId(req.user.id);
     const regionId = await getManagerRegionId(manager);
@@ -196,6 +219,11 @@ router.delete("/delete", async (req, res) => {
   }
   const data = req.body;
   const query = idsFilter(data?.districts);
+  if (isVibhagManager(req.user?.role)) {
+    const manager = await findAccountByTokenId(req.user.id);
+    const vibhagKeys = await vibhagValueKeys(await getManagerVibhagId(manager));
+    query.vibhag_id = { $in: vibhagKeys.length ? vibhagKeys : ["__none__"] };
+  }
   if (isRegionManager(req.user?.role)) {
     const manager = await findAccountByTokenId(req.user.id);
     const regionKeys = await regionValueKeys(await getManagerRegionId(manager));
@@ -236,6 +264,23 @@ router.patch("/update/:id", async (req, res) => {
   const { id } = req.params;
   const payload = prepareMasterName({ ...req.body });
   let filter = idOrObjectIdFilter(id);
+  if (isVibhagManager(req.user?.role)) {
+    const manager = await findAccountByTokenId(req.user.id);
+    const vibhagKeys = await vibhagValueKeys(await getManagerVibhagId(manager));
+    filter = {
+      $and: [
+        filter,
+        { vibhag_id: { $in: vibhagKeys.length ? vibhagKeys : ["__none__"] } },
+      ],
+    };
+    const allowed = await District.findOne(filter);
+    if (!allowed) {
+      return res.status(403).json({ message: "You cannot do this." });
+    }
+    if (payload.vibhag_id && !vibhagKeys.includes(String(payload.vibhag_id))) {
+      return res.status(403).json({ message: "You cannot do this." });
+    }
+  }
   if (isRegionManager(req.user?.role)) {
     const manager = await findAccountByTokenId(req.user.id);
     const regionKeys = await regionValueKeys(await getManagerRegionId(manager));
