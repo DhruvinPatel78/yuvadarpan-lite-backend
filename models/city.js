@@ -19,6 +19,9 @@ const citySchema = new mongoose.Schema({
     type: String,
     required: true,
   },
+  vibhag_id: {
+    type: String,
+  },
   district_id: {
     type: String,
     required: true,

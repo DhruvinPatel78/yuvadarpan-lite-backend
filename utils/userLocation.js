@@ -12,6 +12,7 @@ const locationFromSamaj = (samaj) => {
     country: asId(samaj.country_id),
     state: asId(samaj.state_id),
     region: asId(samaj.region_id),
+    vibhag: asId(samaj.vibhag_id),
     district: asId(samaj.district_id),
     city: asId(samaj.city_id),
     localSamaj: asId(samaj.id || samaj._id),
@@ -20,7 +21,7 @@ const locationFromSamaj = (samaj) => {
 
 const missingLocationPatch = (user = {}, fromSamaj = {}) => {
   const patch = {};
-  ["country", "state", "region", "district", "city"].forEach((key) => {
+  ["country", "state", "region", "vibhag", "district", "city"].forEach((key) => {
     if (!asId(user[key]) && asId(fromSamaj[key])) {
       patch[key] = fromSamaj[key];
     }

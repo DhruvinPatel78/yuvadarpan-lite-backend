@@ -21,16 +21,19 @@ const {
   samajValueKeys,
   usersInManagerCityQuery,
   usersInManagerDistrictQuery,
+  usersInManagerVibhagQuery,
   usersInManagerRegionQuery,
   usersInManagerStateQuery,
   usersInManagerCountryQuery,
   samajIdsForCity,
   samajIdsForDistrict,
+  samajIdsForVibhag,
   samajIdsForRegion,
   samajIdsForState,
   samajIdsForCountry,
   getManagerCityId,
   getManagerDistrictId,
+  getManagerVibhagId,
   getManagerRegionId,
   getManagerStateId,
   getManagerCountryId,
@@ -274,6 +277,8 @@ router.get("/list", async (req, res) => {
         query = mergeAnd(query, await usersInManagerCityQuery(manager));
       } else if (role === "DISTRICT_MANAGER") {
         query = mergeAnd(query, await usersInManagerDistrictQuery(manager));
+      } else if (role === "VIBHAG_MANAGER") {
+        query = mergeAnd(query, await usersInManagerVibhagQuery(manager));
       } else if (role === "REGION_MANAGER") {
         query = mergeAnd(query, await usersInManagerRegionQuery(manager));
       } else if (role === "STATE_MANAGER") {
@@ -498,6 +503,25 @@ router.get("/requests", async (req, res) => {
         totalPages,
         data: MangerUsers,
       });
+    } else if (role === "VIBHAG_MANAGER") {
+      const manager = await findAccountByTokenId(id);
+      const managerPendingQuery = mergeAnd(
+        pendingQuery,
+        await usersInManagerVibhagQuery(manager)
+      );
+      const MangerUsers = await User.find(managerPendingQuery)
+        .sort({ id: -1 })
+        .skip(offset)
+        .limit(limit)
+        .exec();
+      const managerTotalItem = await User.countDocuments(managerPendingQuery);
+      const totalPages = Math.ceil(managerTotalItem / limit);
+      res.status(200).json({
+        total: managerTotalItem,
+        page,
+        totalPages,
+        data: MangerUsers,
+      });
     }
   }
 });
@@ -547,6 +571,7 @@ router.post("/add", async (req, res) => {
       actorRole === "SAMAJ_MANAGER" ||
       actorRole === "CITY_MANAGER" ||
       actorRole === "DISTRICT_MANAGER" ||
+      actorRole === "VIBHAG_MANAGER" ||
       actorRole === "REGION_MANAGER" ||
       actorRole === "STATE_MANAGER" ||
       actorRole === "COUNTRY_MANAGER"
@@ -571,6 +596,15 @@ router.post("/add", async (req, res) => {
       const manager = await findAccountByTokenId(req.user.id);
       const samajIds = await samajIdsForDistrict(
         await getManagerDistrictId(manager),
+      );
+      if (!user.localSamaj || !samajIds.includes(String(user.localSamaj))) {
+        return res.status(403).json({ message: appMessages.notAllowed });
+      }
+    }
+    if (actorRole === "VIBHAG_MANAGER") {
+      const manager = await findAccountByTokenId(req.user.id);
+      const samajIds = await samajIdsForVibhag(
+        await getManagerVibhagId(manager),
       );
       if (!user.localSamaj || !samajIds.includes(String(user.localSamaj))) {
         return res.status(403).json({ message: appMessages.notAllowed });
@@ -895,6 +929,25 @@ router.patch("/update/:id", async (req, res) => {
         }
       }
     }
+    if (!isSelf && req.user.role === "VIBHAG_MANAGER") {
+      const manager = await findAccountByTokenId(req.user.id);
+      const inVibhag = await User.findOne({
+        _id: currentUser._id,
+        ...(await usersInManagerVibhagQuery(manager)),
+      });
+      if (!inVibhag) {
+        return res.status(403).json({ message: appMessages.notAllowed });
+      }
+      delete payload.role;
+      if (payload.localSamaj) {
+        const samajIds = await samajIdsForVibhag(
+          await getManagerVibhagId(manager),
+        );
+        if (!samajIds.includes(String(payload.localSamaj))) {
+          return res.status(403).json({ message: appMessages.notAllowed });
+        }
+      }
+    }
     if (!isSelf && req.user.role === "REGION_MANAGER") {
       const manager = await findAccountByTokenId(req.user.id);
       const inRegion = await User.findOne({
@@ -1043,6 +1096,10 @@ router.delete("/delete", async (req, res) => {
     if (req.user.role === "DISTRICT_MANAGER") {
       const manager = await findAccountByTokenId(req.user.id);
       Object.assign(query, await usersInManagerDistrictQuery(manager));
+    }
+    if (req.user.role === "VIBHAG_MANAGER") {
+      const manager = await findAccountByTokenId(req.user.id);
+      Object.assign(query, await usersInManagerVibhagQuery(manager));
     }
     if (req.user.role === "REGION_MANAGER") {
       const manager = await findAccountByTokenId(req.user.id);
@@ -1205,6 +1262,10 @@ router.patch("/approveRejectMany", async (req, res) => {
     if (req.user.role === "DISTRICT_MANAGER") {
       const manager = await findAccountByTokenId(req.user.id);
       Object.assign(query, await usersInManagerDistrictQuery(manager));
+    }
+    if (req.user.role === "VIBHAG_MANAGER") {
+      const manager = await findAccountByTokenId(req.user.id);
+      Object.assign(query, await usersInManagerVibhagQuery(manager));
     }
     if (req.user.role === "REGION_MANAGER") {
       const manager = await findAccountByTokenId(req.user.id);

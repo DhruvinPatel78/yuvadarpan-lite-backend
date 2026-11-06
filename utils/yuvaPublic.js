@@ -4,6 +4,7 @@ const Native = require("../models/native");
 const Country = require("../models/country");
 const State = require("../models/state");
 const Region = require("../models/region");
+const Vibhag = require("../models/vibhag");
 const District = require("../models/district");
 const City = require("../models/city");
 const Samaj = require("../models/samaj");
@@ -78,6 +79,7 @@ const resolveYuvaLabels = async (yuva) => {
     country,
     state,
     region,
+    vibhag,
     district,
     city,
     localSamaj,
@@ -90,6 +92,7 @@ const resolveYuvaLabels = async (yuva) => {
     nameOf(Country, yuva.country),
     nameOf(State, yuva.state),
     nameOf(Region, yuva.region),
+    nameOf(Vibhag, yuva.vibhag),
     nameOf(District, yuva.district),
     nameOf(City, yuva.city),
     nameOf(Samaj, yuva.localSamaj),
@@ -103,6 +106,7 @@ const resolveYuvaLabels = async (yuva) => {
     country,
     state,
     region,
+    vibhag,
     district,
     city,
     localSamaj,
@@ -134,6 +138,7 @@ const MEMBER_YUVA_KEYS = [
   "city",
   "state",
   "region",
+  "vibhag",
   "district",
   "localSamaj",
   "native",
