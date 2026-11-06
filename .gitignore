@@ -13,3 +13,4 @@ utils/serviceAccountKey.json
 .yarn/install-state.gz
 pnpm-lock.yaml
 .yarn/
+.DS_Store

@@ -6,7 +6,7 @@ const multer = require("multer");
 const { s3, BUCKET } = require("../utils/s3");
 const { verifyToken, errorCheck, WRITE_METHODS } = require("../utils/auth");
 const { rejectUnlessStaff } = require("../utils/managerScope");
-const { compressYuvaPhoto } = require("../utils/compressYuvaPhoto");
+const { convertToModernFormat } = require("../utils/compressYuvaPhoto");
 
 const storage = multer.diskStorage({});
 const upload = multer({
@@ -61,11 +61,12 @@ router.post("/upload", (req, res, next) => {
         : "yuva_images";
 
     try {
-      const compressed = await compressYuvaPhoto(file);
-      body = compressed.body;
-      contentType = compressed.contentType;
-      if (typeof compressed.filename === "function") {
-        filename = compressed.filename(filename);
+      const original = await fs.promises.readFile(file.path);
+      const optimized = await convertToModernFormat(original, file.mimetype);
+      body = optimized.body;
+      contentType = optimized.contentType;
+      if (typeof optimized.filename === "function") {
+        filename = optimized.filename(filename);
       }
     } catch (compressError) {
       console.error("yuva-photo-compress-failed", compressError.message);
