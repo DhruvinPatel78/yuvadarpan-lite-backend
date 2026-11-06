@@ -71,13 +71,7 @@ const yuvaListSchema = new mongoose.Schema({
     },
   },
   firm: langPair,
-  firmAddress: {
-    ...langPairRequired,
-    validate: {
-      validator: hasEn,
-      message: "Firm address is required",
-    },
-  },
+  firmAddress: langPair,
   address: {
     ...langPairRequired,
     validate: {
