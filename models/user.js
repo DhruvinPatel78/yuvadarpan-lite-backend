@@ -41,6 +41,7 @@ const userSchema = new mongoose.Schema({
     type: String,
     required: true,
   },
+  vibhag: String,
   localSamaj: {
     type: String,
     required: true,

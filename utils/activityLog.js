@@ -3,6 +3,7 @@ const User = require("../models/user");
 const Samaj = require("../models/samaj");
 const City = require("../models/city");
 const District = require("../models/district");
+const Vibhag = require("../models/vibhag");
 const Region = require("../models/region");
 const State = require("../models/state");
 const Country = require("../models/country");
@@ -18,6 +19,7 @@ const STAFF_ROLES = new Set([
   "SAMAJ_MANAGER",
   "CITY_MANAGER",
   "DISTRICT_MANAGER",
+  "VIBHAG_MANAGER",
   "REGION_MANAGER",
   "STATE_MANAGER",
   "COUNTRY_MANAGER",
@@ -54,6 +56,7 @@ const FIELD_LABELS = {
   active: "Active",
   allowed: "Allowed",
   region: "Region",
+  vibhag: "Vibhag",
   localSamaj: "Local samaj",
   city: "City",
   district: "District",
@@ -66,6 +69,7 @@ const FIELD_LABELS = {
   country_id: "Country",
   state_id: "State",
   region_id: "Region",
+  vibhag_id: "Vibhag",
   district_id: "District",
   city_id: "City",
   bloodGroup: "Blood group",
@@ -101,6 +105,7 @@ const LOOKUP_MODELS = {
   lastName: Surname,
   localSamaj: Samaj,
   region: Region,
+  vibhag: Vibhag,
   city: City,
   district: District,
   state: State,
@@ -110,6 +115,7 @@ const LOOKUP_MODELS = {
   country_id: Country,
   state_id: State,
   region_id: Region,
+  vibhag_id: Vibhag,
   district_id: District,
   city_id: City,
   "mamaInfo.native": Native,

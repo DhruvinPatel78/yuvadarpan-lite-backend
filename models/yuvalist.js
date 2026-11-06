@@ -128,6 +128,7 @@ const yuvaListSchema = new mongoose.Schema({
   handicap: Boolean,
   manglik: { type: Boolean, default: false },
   region: String,
+  vibhag: String,
   district: String,
   localSamaj: String,
   handicapDetails: langPair,

@@ -15,11 +15,13 @@ const {
   isOwnSamajQuery,
   isOwnCityQuery,
   isOwnDistrictQuery,
+  isOwnVibhagQuery,
   isOwnRegionQuery,
   isOwnStateQuery,
   isOwnCountryQuery,
   recordsInManagerCityQuery,
   recordsInManagerDistrictQuery,
+  recordsInManagerVibhagQuery,
   recordsInManagerRegionQuery,
   recordsInManagerStateQuery,
   recordsInManagerCountryQuery,
@@ -164,6 +166,7 @@ const buildYuvaListFilter = (query = {}) => {
   const native = toQueryArray(query.native);
   const state = toQueryArray(query.state);
   const region = toQueryArray(query.region);
+  const vibhag = toQueryArray(query.vibhag);
   const district = toQueryArray(query.district);
   const city = toQueryArray(query.city);
   const samaj = toQueryArray(query.samaj || query.localSamaj);
@@ -178,6 +181,9 @@ const buildYuvaListFilter = (query = {}) => {
   }
   if (region.length) {
     clauses.push({ region: { $in: region } });
+  }
+  if (vibhag.length) {
+    clauses.push({ vibhag: { $in: vibhag } });
   }
   if (district.length) {
     clauses.push({ district: { $in: district } });
@@ -367,6 +373,12 @@ const getYuvaListScopeFilter = async (req) => {
     }
     return recordsInManagerDistrictQuery(await findAccountByTokenId(id));
   }
+  if (role === "VIBHAG_MANAGER") {
+    if (!isOwnVibhagQuery(req.query)) {
+      return {};
+    }
+    return recordsInManagerVibhagQuery(await findAccountByTokenId(id));
+  }
   return { active: true };
 };
 
@@ -452,6 +464,10 @@ router.get("/get-all-list", async (req, res) => {
     } else if (role === "DISTRICT_MANAGER") {
       const manager = await findAccountByTokenId(id);
       const dbYuva = await Yuvalist.find(await recordsInManagerDistrictQuery(manager));
+      res.status(200).json(dbYuva.map(withEnGu));
+    } else if (role === "VIBHAG_MANAGER") {
+      const manager = await findAccountByTokenId(id);
+      const dbYuva = await Yuvalist.find(await recordsInManagerVibhagQuery(manager));
       res.status(200).json(dbYuva.map(withEnGu));
     }
   }

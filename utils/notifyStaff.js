@@ -8,6 +8,7 @@ const {
   samajValueKeys,
   usersInManagerCityQuery,
   usersInManagerDistrictQuery,
+  usersInManagerVibhagQuery,
   usersInManagerRegionQuery,
   usersInManagerStateQuery,
   usersInManagerCountryQuery,
@@ -19,6 +20,7 @@ const STAFF_ROLES = [
   "SAMAJ_MANAGER",
   "CITY_MANAGER",
   "DISTRICT_MANAGER",
+  "VIBHAG_MANAGER",
   "REGION_MANAGER",
   "STATE_MANAGER",
   "COUNTRY_MANAGER",
@@ -72,6 +74,7 @@ const usersScopeForManager = async (manager) => {
   }
   if (role === "CITY_MANAGER") return usersInManagerCityQuery(manager);
   if (role === "DISTRICT_MANAGER") return usersInManagerDistrictQuery(manager);
+  if (role === "VIBHAG_MANAGER") return usersInManagerVibhagQuery(manager);
   if (role === "REGION_MANAGER") return usersInManagerRegionQuery(manager);
   if (role === "STATE_MANAGER") return usersInManagerStateQuery(manager);
   if (role === "COUNTRY_MANAGER") return usersInManagerCountryQuery(manager);

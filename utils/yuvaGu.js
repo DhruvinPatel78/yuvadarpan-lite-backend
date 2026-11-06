@@ -21,6 +21,7 @@ const MASTER_KEYS = [
   "country",
   "state",
   "region",
+  "vibhag",
   "district",
   "city",
   "localSamaj",
