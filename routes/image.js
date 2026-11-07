@@ -53,7 +53,7 @@ router.post("/upload", (req, res, next) => {
 
   try {
     let filename = sanitizeFilename(req.body?.filename, file.originalname);
-    let body = fs.createReadStream(file.path);
+    let body = await fs.promises.readFile(file.path);
     let contentType = file.mimetype;
     const folder =
       String(req.body?.folder || "").trim() === "ad_images"
@@ -61,8 +61,7 @@ router.post("/upload", (req, res, next) => {
         : "yuva_images";
 
     try {
-      const original = await fs.promises.readFile(file.path);
-      const optimized = await convertToModernFormat(original, file.mimetype);
+      const optimized = await convertToModernFormat(body, file.mimetype);
       body = optimized.body;
       contentType = optimized.contentType;
       if (typeof optimized.filename === "function") {
@@ -72,23 +71,46 @@ router.post("/upload", (req, res, next) => {
       console.error("yuva-photo-compress-failed", compressError.message);
     }
 
-    await s3.upload({
+    const key = folder + "/" + filename;
+    const uploadParams = {
       Bucket: BUCKET,
-      Key: folder + "/" + filename,
+      Key: key,
       Body: body,
       ContentType: contentType,
-      ...(folder === "ad_images" ? { ACL: "public-read" } : {}),
-    }).promise();
+    };
+
+    try {
+      await s3
+        .upload({
+          ...uploadParams,
+          ...(folder === "ad_images" ? { ACL: "public-read" } : {}),
+        })
+        .promise();
+    } catch (aclError) {
+      // Buckets with ACLs disabled reject public-read; retry without ACL.
+      if (
+        folder === "ad_images" &&
+        /AccessControlListNotSupported|InvalidRequest|AccessDenied/i.test(
+          String(aclError.code || aclError.message || "")
+        )
+      ) {
+        console.error("ad-image-acl-rejected-retrying", aclError.message);
+        await s3.upload(uploadParams).promise();
+      } else {
+        throw aclError;
+      }
+    }
 
     res.status(200).json({
       data: {
         url: process.env.AWS_BASE_URL + folder + "/" + filename,
         name: filename,
-        awsId: folder + "/" + filename,
+        awsId: key,
       },
       message: "image-upload-successfully",
     });
   } catch (error) {
+    console.error("image-upload-failed", error.code || error.name, error.message);
     res.status(500).json({ message: "Could not upload image." });
   } finally {
     removeTempFile(file.path);
