@@ -200,6 +200,7 @@ router.get("/list", async (req, res) => {
     const { id, role } = req.user;
     const lastName = asQueryList(req.query.lastName);
     const region = asQueryList(req.query.region);
+    const vibhag = asQueryList(req.query.vibhag);
     const samaj = asQueryList(req.query.samaj);
     const roles = asQueryList(req.query.roles);
     const state = asQueryList(req.query.state);
@@ -248,6 +249,12 @@ router.get("/list", async (req, res) => {
             region: { $in: region },
           }
         : {};
+    const CurrentVibhag =
+      vibhag?.length > 0
+        ? {
+            vibhag: { $in: vibhag },
+          }
+        : {};
     const CurrentSamaj =
       samaj?.length > 0
         ? {
@@ -258,6 +265,7 @@ router.get("/list", async (req, res) => {
       LastName,
       State,
       CurrentRegion,
+      CurrentVibhag,
       CurrentSamaj,
       FamilyId,
       FirstName,
@@ -307,6 +315,7 @@ router.get("/requests", async (req, res) => {
     const { id, role } = req.user;
     const lastName = asQueryList(req.query.lastName);
     const region = asQueryList(req.query.region);
+    const vibhag = asQueryList(req.query.vibhag);
     const samaj = asQueryList(req.query.samaj);
     const roles = asQueryList(req.query.roles);
     const state = asQueryList(req.query.state);
@@ -355,6 +364,12 @@ router.get("/requests", async (req, res) => {
             region: { $in: region },
           }
         : {};
+    const CurrentVibhag =
+      vibhag?.length > 0
+        ? {
+            vibhag: { $in: vibhag },
+          }
+        : {};
     const CurrentSamaj =
       samaj?.length > 0
         ? {
@@ -365,6 +380,7 @@ router.get("/requests", async (req, res) => {
       LastName,
       State,
       CurrentRegion,
+      CurrentVibhag,
       CurrentSamaj,
       FamilyId,
       FirstName,
