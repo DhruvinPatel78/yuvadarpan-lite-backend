@@ -335,6 +335,7 @@ router.patch("/update/:id", async (req, res) => {
           .json({ message: "Select at least one display page." });
       }
     }
+    const previousAwsId = normalizeText(current?.image?.awsId);
     if (payload.image != null) {
       const image = normalizeImage(payload.image);
       if (!image) {
@@ -351,6 +352,35 @@ router.patch("/update/:id", async (req, res) => {
         updatedBy: req?.user?.id,
       },
     });
+
+    const nextAwsId = normalizeText(payload.image?.awsId);
+    if (
+      nextAwsId &&
+      previousAwsId &&
+      nextAwsId !== previousAwsId &&
+      previousAwsId.startsWith("ad_images/") &&
+      !previousAwsId.includes("..")
+    ) {
+      try {
+        const stillUsed = await Advertisement.exists({
+          "image.awsId": previousAwsId,
+        });
+        if (!stillUsed) {
+          await s3
+            .deleteObject({
+              Bucket: BUCKET,
+              Key: previousAwsId,
+            })
+            .promise();
+        }
+      } catch (cleanupError) {
+        console.error(
+          "advertisement-old-image-cleanup-failed",
+          cleanupError.message
+        );
+      }
+    }
+
     res.status(200).json({ message: "Update Successfully" });
   } catch (error) {
     console.error("advertisement-update-failed", error.message);

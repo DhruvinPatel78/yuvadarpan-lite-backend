@@ -7,6 +7,7 @@ const { s3, BUCKET } = require("../utils/s3");
 const { verifyToken, errorCheck, WRITE_METHODS } = require("../utils/auth");
 const { rejectUnlessStaff } = require("../utils/managerScope");
 const { convertToModernFormat } = require("../utils/compressYuvaPhoto");
+const Advertisement = require("../models/advertisement");
 
 const storage = multer.diskStorage({});
 const upload = multer({
@@ -71,6 +72,14 @@ router.post("/upload", (req, res, next) => {
       console.error("yuva-photo-compress-failed", compressError.message);
     }
 
+    // Unique keys for ads so a pending upload never overwrites the saved image.
+    if (folder === "ad_images") {
+      const ext = path.extname(filename) || ".webp";
+      const base =
+        path.basename(filename, ext).replace(/_+$/g, "") || "advertisement";
+      filename = `${base}_${Date.now()}${ext}`;
+    }
+
     const key = folder + "/" + filename;
     const uploadParams = {
       Bucket: BUCKET,
@@ -116,4 +125,37 @@ router.post("/upload", (req, res, next) => {
     removeTempFile(file.path);
   }
 });
+
+router.delete("/delete", async (req, res) => {
+  if (errorCheck(req, res) || rejectUnlessStaff(req, res)) {
+    return;
+  }
+
+  const awsId = String(req.body?.awsId || req.query?.awsId || "")
+    .trim()
+    .replace(/^\//, "");
+  if (!awsId || !awsId.startsWith("ad_images/") || awsId.includes("..")) {
+    return res.status(400).json({ message: "Invalid image." });
+  }
+
+  try {
+    const inUse = await Advertisement.exists({ "image.awsId": awsId });
+    if (inUse) {
+      return res.status(409).json({ message: "Image is in use." });
+    }
+
+    await s3
+      .deleteObject({
+        Bucket: BUCKET,
+        Key: awsId,
+      })
+      .promise();
+
+    res.status(200).json({ message: "Image deleted." });
+  } catch (error) {
+    console.error("image-delete-failed", error.code || error.name, error.message);
+    res.status(500).json({ message: "Could not delete image." });
+  }
+});
+
 module.exports = router;
