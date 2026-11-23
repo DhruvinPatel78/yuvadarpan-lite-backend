@@ -208,7 +208,6 @@ module.exports = {
   getPublicYuvaById,
   pickYuvaFields,
   resolveYuvaLabels,
-  sanitizeYuvaId,
   isHiddenFromMembers,
   memberBrowseMaritalFilter,
   MEMBER_YUVA_KEYS,

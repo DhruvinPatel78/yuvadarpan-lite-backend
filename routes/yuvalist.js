@@ -6,14 +6,6 @@ const { v4: uuidv4 } = require('uuid');
 const { idsFilter, idOrObjectIdFilter, sanitizeUpdatePayload, findByAnyId } = require("../utils/childCount");
 const { deleteYuvaImages } = require("../utils/s3");
 const { getPublicYuvaById, pickYuvaFields, resolveYuvaLabels, MEMBER_YUVA_SELECT, MEMBER_PROFILE_KEYS, isHiddenFromMembers, memberBrowseMaritalFilter } = require("../utils/yuvaPublic");
-const {
-  getYuvaOgPayload,
-  renderOgHtml,
-  buildYuvaOgMeta,
-  frontendBase,
-  defaultOgImage,
-} = require("../utils/yuvaOg");
-const { getYuvaOgJpeg, renderDefaultOgJpeg } = require("../utils/yuvaOgImage");
 const { verifyToken, errorCheck } = require("../utils/auth");
 const { escapeRegex } = require("../utils/escapeRegex");
 const { containsAny } = require("../utils/caseInsensitiveSearch");
@@ -69,88 +61,6 @@ router.get("/public/:id", async (req, res) => {
   } catch (e) {
     console.error("yuva public get by id failed", e);
     res.status(500).json({ message: "Could not load data." });
-  }
-});
-
-const isSocialCrawler = (userAgent = "") =>
-  /bot|crawl|slurp|spider|facebookexternalhit|facebot|twitterbot|linkedinbot|whatsapp|telegram|discordbot|skypeuripreview|pinterest|vkshare|embedly|quora link preview|outbrain|google.*preview|bingpreview|yahoo|duckduck|applebot|ia_archiver/i.test(
-    String(userAgent)
-  );
-
-router.get("/og/:id", async (req, res) => {
-  try {
-    const meta = await getYuvaOgPayload(req.params.id);
-    if (!meta) {
-      return res.status(404).json({ message: "Profile not found." });
-    }
-    res.status(200).json(meta);
-  } catch (e) {
-    console.error("yuva og meta failed", e);
-    res.status(500).json({ message: "Could not load share preview." });
-  }
-});
-
-router.get("/og-image/:id", async (req, res) => {
-  try {
-    const rawId = String(req.params.id || "").replace(/\.jpe?g$/i, "");
-    const result = await getYuvaOgJpeg(rawId);
-    const body = result?.body || (await renderDefaultOgJpeg());
-    res.status(result ? 200 : 404).set({
-      "Content-Type": "image/jpeg",
-      "Cache-Control": "public, max-age=86400, stale-while-revalidate=604800",
-      "Content-Length": String(body.length),
-    });
-    res.end(body);
-  } catch (e) {
-    console.error("yuva og image failed", e);
-    try {
-      const fallback = await renderDefaultOgJpeg();
-      res.status(200).set({
-        "Content-Type": "image/jpeg",
-        "Cache-Control": "public, max-age=300",
-        "Content-Length": String(fallback.length),
-      });
-      res.end(fallback);
-    } catch (inner) {
-      res.status(500).json({ message: "Could not load share image." });
-    }
-  }
-});
-
-router.get("/share/:id", async (req, res) => {
-  try {
-    const profileId = String(req.params.id || "").trim();
-    const redirectUrl = `${frontendBase()}/yuva/${encodeURIComponent(profileId)}`;
-    const meta = await getYuvaOgPayload(profileId, { requestUrl: redirectUrl });
-    const payload =
-      meta ||
-      buildYuvaOgMeta(
-        { id: profileId, firstName: { en: "Yuvadarpan", gu: "યુવાદર્પણ" } },
-        {
-          requestUrl: redirectUrl,
-          profileId,
-        }
-      );
-    if (!meta) {
-      payload.title = "Yuvadarpan Profile";
-      payload.description = "Yuvadarpan community directory profile.";
-      payload.image = defaultOgImage();
-    }
-
-    // Always emit OG HTML so WhatsApp/Facebook/Telegram can scrape previews.
-    // Humans are redirected to the SPA profile URL.
-    res
-      .status(meta ? 200 : 404)
-      .set({
-        "Content-Type": "text/html; charset=utf-8",
-        "Cache-Control": isSocialCrawler(req.get("user-agent"))
-          ? "public, max-age=300"
-          : "no-store",
-      })
-      .send(renderOgHtml(payload, { redirectUrl }));
-  } catch (e) {
-    console.error("yuva share preview failed", e);
-    res.status(500).type("html").send("<!DOCTYPE html><title>Yuvadarpan</title><p>Could not load profile.</p>");
   }
 });
 
