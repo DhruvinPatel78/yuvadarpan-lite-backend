@@ -85,7 +85,6 @@ const FIELD_LABELS = {
   manglik: "Manglik",
   firm: "Firm",
   firmAddress: "Firm address",
-  address: "Address",
   "mamaInfo.name": "Mama name",
   "mamaInfo.lastName": "Mama last name",
   "mamaInfo.city": "Mama city",
