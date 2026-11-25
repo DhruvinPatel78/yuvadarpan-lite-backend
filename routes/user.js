@@ -50,6 +50,29 @@ const {
   inferUserAction,
 } = require("../utils/activityLog");
 const { enrichUserLocation } = require("../utils/userLocation");
+const {
+  asPermissionObject,
+  getPermissionByUserId,
+  setPermissionForUser,
+  clearPermissionForUser,
+} = require("../models/permission");
+
+/** Keep Permission docs only for manager roles. */
+const normalizePermissionForRole = (role, permission) => {
+  if (!isLocationMasterReadOnly(role)) {
+    return {};
+  }
+  return asPermissionObject(permission);
+};
+
+const savePermissionForUser = async (userId, role, permission) => {
+  const flags = normalizePermissionForRole(role, permission);
+  if (!isLocationMasterReadOnly(role)) {
+    await clearPermissionForUser(userId);
+    return {};
+  }
+  return setPermissionForUser(userId, flags);
+};
 
 const createUniqueOtp = async () => {
   for (let attempt = 0; attempt < 8; attempt += 1) {
@@ -171,6 +194,7 @@ router.get("/getInfo/:id", async (req, res) => {
   if (Object.keys(patch).length && mongoId) {
     await User.updateOne({ _id: mongoId }, { $set: patch });
   }
+  withLocation.Permission = await getPermissionByUserId(mongoId);
   res.status(200).json(withLocation);
 });
 
@@ -666,6 +690,7 @@ router.post("/add", async (req, res) => {
       }
     }
     const { user: withLocation } = await enrichUserLocation(user);
+    delete withLocation.Permission;
     const dbUser = await User.create({
       ...withLocation,
       id: uuidv4().replace(/-/g, ""),
@@ -678,6 +703,11 @@ router.post("/add", async (req, res) => {
       fcmToken: user.fcmToken || null,
       language: user.language === "en" ? "en" : "gu",
     });
+    await savePermissionForUser(
+      dbUser._id,
+      dbUser.role || withLocation.role || user.role,
+      user.Permission,
+    );
     await notifyAccountEvent(
       dbUser,
       isAdmin ? "AccountVerifySuccess" : "RegistrationSuccess",
@@ -745,6 +775,7 @@ router.post("/signup", async (req, res) => {
     }
 
     const { user: withLocation } = await enrichUserLocation(user);
+    delete withLocation.Permission;
     const dbUser = await User.create({
       ...withLocation,
       id: uuidv4().replace(/-/g, ""),
@@ -910,11 +941,31 @@ router.patch("/update/:id", async (req, res) => {
     if (isSelf) {
       delete payload.role;
       delete payload.password;
+      delete payload.Permission;
       if (!actorIsAdmin) {
         delete payload.allowed;
         delete payload.active;
       }
     }
+
+    let nextPermission = null;
+    const permissionTouched =
+      Object.prototype.hasOwnProperty.call(payload, "Permission") ||
+      Boolean(payload.role);
+    // Only admins assign manager Permission flags (stored in Permission collection).
+    if (!actorIsAdmin) {
+      delete payload.Permission;
+    } else if (permissionTouched) {
+      const nextRole = payload.role || currentUser.role;
+      const existing = await getPermissionByUserId(currentUser._id);
+      nextPermission = normalizePermissionForRole(
+        nextRole,
+        Object.prototype.hasOwnProperty.call(payload, "Permission")
+          ? payload.Permission
+          : existing,
+      );
+    }
+    delete payload.Permission;
 
     if (!isSelf && req.user.role === "SAMAJ_MANAGER") {
       const manager = await findAccountByTokenId(req.user.id);
@@ -1065,6 +1116,14 @@ router.patch("/update/:id", async (req, res) => {
         },
       },
     );
+
+    if (nextPermission !== null) {
+      await savePermissionForUser(
+        currentUser._id,
+        payload.role || currentUser.role,
+        nextPermission,
+      );
+    }
 
     if (Object.keys(statusPayload).length) {
       await notifyStatusChange(
