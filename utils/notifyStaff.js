@@ -1,19 +1,30 @@
 const User = require("../models/user");
 const Yuvalist = require("../models/yuvalist");
+const Surname = require("../models/surname");
+const {
+  findUserIdsWithPermission,
+  getPermissionByUserId,
+} = require("../models/permission");
 const { sendNotification } = require("./fcm");
+const { sendAccountEmail } = require("./accountMail");
 const notification = require("../data/locale/notifications.json");
+const { idOrObjectIdFilter } = require("./childCount");
+const { nameText } = require("./masterName");
 const {
   isAdmin,
   isLocationMasterReadOnly,
   samajValueKeys,
-  usersInManagerCityQuery,
-  usersInManagerDistrictQuery,
-  usersInManagerVibhagQuery,
-  usersInManagerRegionQuery,
-  usersInManagerStateQuery,
-  usersInManagerCountryQuery,
+  recordsInManagerCityQuery,
+  recordsInManagerDistrictQuery,
+  recordsInManagerVibhagQuery,
+  recordsInManagerRegionQuery,
+  recordsInManagerStateQuery,
+  recordsInManagerCountryQuery,
   getYuvaWriteScopeFilter,
 } = require("./managerScope");
+
+const hasPermission = (permission, key) =>
+  Boolean(permission && permission[key] === true);
 
 const STAFF_ROLES = [
   "ADMIN",
@@ -32,8 +43,20 @@ const pick = (value, lang) => {
   return value[lang] || value.en || "";
 };
 
-const displayName = (person) => {
-  const name = [person?.firstName, person?.middleName, person?.lastName]
+const resolveLastName = async (lastName, lang = "gu") => {
+  const raw = String(lastName || "").trim();
+  if (!raw) return "";
+  try {
+    const surname = await Surname.findOne(idOrObjectIdFilter(raw)).lean();
+    return nameText(surname, lang) || "";
+  } catch (error) {
+    return "";
+  }
+};
+
+const displayName = async (person, lang = "gu") => {
+  const last = await resolveLastName(person?.lastName, lang);
+  const name = [person?.firstName, person?.middleName, last]
     .map((part) => String(part || "").trim())
     .filter(Boolean)
     .join(" ");
@@ -65,6 +88,7 @@ const staffTokenQuery = (excludeIds = []) => {
   return query;
 };
 
+/** Match managers to a new request by their location hierarchy (same samaj/city/…/country). */
 const usersScopeForManager = async (manager) => {
   const role = String(manager?.role || "").toUpperCase();
   if (role === "SAMAJ_MANAGER") {
@@ -72,12 +96,12 @@ const usersScopeForManager = async (manager) => {
     if (!keys.length) return { _id: { $in: [] } };
     return { localSamaj: { $in: keys } };
   }
-  if (role === "CITY_MANAGER") return usersInManagerCityQuery(manager);
-  if (role === "DISTRICT_MANAGER") return usersInManagerDistrictQuery(manager);
-  if (role === "VIBHAG_MANAGER") return usersInManagerVibhagQuery(manager);
-  if (role === "REGION_MANAGER") return usersInManagerRegionQuery(manager);
-  if (role === "STATE_MANAGER") return usersInManagerStateQuery(manager);
-  if (role === "COUNTRY_MANAGER") return usersInManagerCountryQuery(manager);
+  if (role === "CITY_MANAGER") return recordsInManagerCityQuery(manager);
+  if (role === "DISTRICT_MANAGER") return recordsInManagerDistrictQuery(manager);
+  if (role === "VIBHAG_MANAGER") return recordsInManagerVibhagQuery(manager);
+  if (role === "REGION_MANAGER") return recordsInManagerRegionQuery(manager);
+  if (role === "STATE_MANAGER") return recordsInManagerStateQuery(manager);
+  if (role === "COUNTRY_MANAGER") return recordsInManagerCountryQuery(manager);
   return { _id: { $in: [] } };
 };
 
@@ -124,12 +148,78 @@ const collectStaffTokens = async (subject, kind, excludeIds = []) => {
   return [...new Set(tokens.filter(Boolean))];
 };
 
-const pushCopy = (kind, lang, person) => {
+const collectManagersForNewUserEmail = async (subject, excludeIds = []) => {
+  const permittedIds = await findUserIdsWithPermission("newUserRequest");
+  if (!permittedIds.length) return [];
+
+  const excluded = asIdSet(excludeIds);
+  const query = {
+    role: { $in: STAFF_ROLES.filter((role) => role !== "ADMIN") },
+    active: { $ne: false },
+    allowed: { $ne: false },
+    email: { $exists: true, $nin: [null, ""] },
+    _id: { $in: permittedIds },
+  };
+  if (excluded.size) {
+    query.$and = [
+      { id: { $nin: [...excluded] } },
+      { _id: { $nin: [...excluded] } },
+    ];
+  }
+
+  const managers = await User.find(query)
+    .select(
+      "email role id _id firstName localSamaj city district region state country language",
+    )
+    .lean();
+
+  const recipients = [];
+  for (const manager of managers) {
+    try {
+      const permission = await getPermissionByUserId(manager?._id);
+      if (
+        isLocationMasterReadOnly(manager?.role) &&
+        hasPermission(permission, "newUserRequest") &&
+        (await managerSeesSubject(manager, subject, "user"))
+      ) {
+        recipients.push(manager);
+      }
+    } catch (error) {
+      console.error("notify-staff-email-scope-failed", manager?.id, error.message);
+    }
+  }
+  return recipients;
+};
+
+const emailManagersNewSignupRequest = async (subject, excludeIds = []) => {
+  if (!subject) return;
+  const managers = await collectManagersForNewUserEmail(subject, excludeIds);
+  if (!managers.length) return;
+
+  const requesterName = await displayName(subject, "gu");
+  await Promise.allSettled(
+    managers.map((manager) =>
+      sendAccountEmail(
+        { ...manager, language: "gu" },
+        "NewSignupRequest",
+        { language: "gu", displayName: requesterName },
+      ).catch((error) => {
+        console.error(
+          "manager-new-user-email-failed",
+          manager?.email,
+          error?.message || error,
+        );
+      }),
+    ),
+  );
+};
+
+const pushCopy = async (kind, lang, person) => {
   const entry = notification[kind];
   if (!entry) {
     return { title: "Yuvadarpan", body: "" };
   }
-  const name = displayName(person);
+  const name = await displayName(person, lang);
   return {
     title: pick(entry.title, lang).replace("{{name}}", name),
     body: pick(entry.body, lang).replace("{{name}}", name),
@@ -150,10 +240,21 @@ const notifyStaffEvent = async ({
 }) => {
   try {
     if (!subject) return;
+
+    if (kind === "NewSignupRequest" && subjectKind === "user") {
+      emailManagersNewSignupRequest(subject, excludeIds).catch((error) => {
+        console.error("notify-staff-email-failed", kind, error.message);
+      });
+    }
+
     const tokens = await collectStaffTokens(subject, subjectKind, excludeIds);
     if (!tokens.length) return;
 
-    const copy = pushCopy(kind, language === "gu" ? "gu" : "en", subject);
+    const copy = await pushCopy(
+      kind,
+      language === "gu" ? "gu" : "en",
+      subject,
+    );
     if (!copy.title) return;
 
     await Promise.allSettled(
@@ -172,4 +273,5 @@ const notifyStaffEvent = async ({
 module.exports = {
   notifyStaffEvent,
   STAFF_ROLES,
+  hasPermission,
 };
