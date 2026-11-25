@@ -195,12 +195,84 @@ const sendWithSmtp = async (email, title, body) => {
   return info;
 };
 
+const HOSTINGER_API = "https://api.mail.hostinger.com/api/v1";
+
+const getHostingerToken = () =>
+  String(
+    process.env.HOSTINGER_TOKEN || "",
+  ).trim();
+
+let mailboxResourceId;
+
+const getMailboxResourceId = async () => {
+  if (mailboxResourceId) {
+    return mailboxResourceId;
+  }
+  const token = getHostingerToken();
+  if (!token) {
+    throw new Error("mail-not-configured");
+  }
+  const response = await fetch(`${HOSTINGER_API}/me`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Accept: "application/json",
+    },
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(
+      payload?.message || payload?.error || `hostinger-me-failed:${response.status}`,
+    );
+  }
+  const resourceId = payload?.data?.mailboxes?.[0]?.resourceId;
+  if (!resourceId) {
+    throw new Error("hostinger-mailbox-missing");
+  }
+  mailboxResourceId = resourceId;
+  return resourceId;
+};
+
+const sendWithHostinger = async (email, title, body) => {
+  const token = getHostingerToken();
+  if (!token) {
+    throw new Error("mail-not-configured");
+  }
+  const resourceId = await getMailboxResourceId();
+  const response = await fetch(`${HOSTINGER_API}/mailboxes/${resourceId}/send`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Accept: "application/json",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      to: [email],
+      displayName: "Yuvadarpan",
+      subject: title,
+      html: body,
+    }),
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    mailboxResourceId = null;
+    throw new Error(
+      payload?.message || payload?.error || `hostinger-failed:${response.status}`,
+    );
+  }
+  console.log("mail-sent-hostinger", email, "ok");
+  return payload;
+};
+
 const mailSender = async (email, title, body) => {
   const to = String(email || "").trim();
   if (!to.includes("@")) {
     throw new Error("invalid-mail-recipient");
   }
 
+  return sendWithHostinger(to, title, body);
+
+  /*
+  // Previous SMTP / Brevo / Resend delivery. Kept for reference.
   let smtpError = null;
   if (hasSmtpConfig()) {
     try {
@@ -242,6 +314,7 @@ const mailSender = async (email, title, body) => {
     throw smtpError;
   }
   throw new Error("mail-not-configured");
+  */
 };
 
 module.exports = mailSender;
