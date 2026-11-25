@@ -555,6 +555,9 @@ router.post("/add", async (req, res) => {
     if (user.role && typeof user.role === "object") {
       user.role = user.role.value || user.role.id || "USER";
     }
+    if (user.familyId != null && user.familyId !== "") {
+      user.familyId = Number(user.familyId);
+    }
     if (!user.password) {
       return res.status(400).json({ message: appMessages.passwordRequired });
     }
@@ -700,37 +703,47 @@ router.post("/add", async (req, res) => {
 });
 
 router.post("/signup", async (req, res) => {
-  const user = req.body;
-  user.password = await bcrypt.hash(user.password, 10);
-  const Email = user.email
-    ? {
-        email: { $eq: user.email },
-      }
-    : {};
-  const emailExist = await User.findOne(Email).lean();
-  const Mobile = user.mobile
-    ? {
-        mobile: { $eq: user.mobile },
-      }
-    : {};
-  const mobileExist = await User.findOne(Mobile).lean();
+  try {
+    const user = { ...req.body };
+    delete user.confirmPassword;
+    if (!user.password) {
+      return res.status(400).json({ message: appMessages.passwordRequired });
+    }
+    if (user.familyId != null && user.familyId !== "") {
+      user.familyId = Number(user.familyId);
+    }
+    user.password = await bcrypt.hash(user.password, 10);
+    const Email = user.email
+      ? {
+          email: { $eq: user.email },
+        }
+      : {};
+    const emailExist = await User.findOne(Email).lean();
+    const Mobile = user.mobile
+      ? {
+          mobile: { $eq: user.mobile },
+        }
+      : {};
+    const mobileExist = await User.findOne(Mobile).lean();
 
-  if (emailExist || mobileExist) {
-    const errorMessage =
-      emailExist && mobileExist
-        ? appMessages.emailAndMobileExist
-        : emailExist
-          ? appMessages.emailExists
-          : appMessages.mobileExists;
+    if (emailExist || mobileExist) {
+      const errorMessage =
+        emailExist && mobileExist
+          ? appMessages.emailAndMobileExist
+          : emailExist
+            ? appMessages.emailExists
+            : appMessages.mobileExists;
 
-      user?.fcmToken && await sendNotification(
-      user?.fcmToken,
-      notification.RegistrationFail.title.en,
-      errorMessage,
-    );
+      user?.fcmToken &&
+        (await sendNotification(
+          user?.fcmToken,
+          notification.RegistrationFail.title.en,
+          errorMessage,
+        ));
 
-    res.status(401).json({ message: errorMessage });
-  } else {
+      return res.status(401).json({ message: errorMessage });
+    }
+
     const { user: withLocation } = await enrichUserLocation(user);
     const dbUser = await User.create({
       ...withLocation,
@@ -743,7 +756,7 @@ router.post("/signup", async (req, res) => {
       role: "USER",
       allowed: false,
       fcmToken: user.fcmToken || null,
-        language: user.language === "en" ? "en" : "gu",
+      language: user.language === "en" ? "en" : "gu",
     });
     await notifyAccountEvent(dbUser, "RegistrationSuccess");
     notifyStaffEvent({
@@ -753,6 +766,8 @@ router.post("/signup", async (req, res) => {
       data: { path: "/request" },
     });
     res.send(dbUser);
+  } catch (e) {
+    res.status(400).json({ message: e.message || appMessages.createFailed });
   }
 });
 
