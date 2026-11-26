@@ -12,10 +12,7 @@
     "start:production": "node server.js production",
     "remove-address": "node scripts/removeYuvaAddress.js",
     "remove-address:staging": "node scripts/removeYuvaAddress.js staging",
-    "remove-address:production": "node scripts/removeYuvaAddress.js production",
-    "backfill-yuva-slugs": "node scripts/backfillYuvaSlugs.js",
-    "backfill-yuva-slugs:staging": "node scripts/backfillYuvaSlugs.js staging",
-    "backfill-yuva-slugs:production": "node scripts/backfillYuvaSlugs.js production"
+    "remove-address:production": "node scripts/removeYuvaAddress.js production"
   },
   "author": "",
   "license": "ISC",
@@ -44,10 +41,8 @@
     "pdfkit": "^0.16.0",
     "serverless-http": "^3.2.0",
     "sharp": "^0.35.4",
-    "slugify": "^1.6.9",
     "swagger-jsdoc": "^6.2.8",
     "swagger-ui-express": "^5.0.1",
-    "transliteration": "^2.7.0",
     "uuid": "^11.1.0"
   },
   "engines": {

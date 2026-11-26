@@ -5,16 +5,7 @@ const User = require("../models/user");
 const { v4: uuidv4 } = require('uuid');
 const { idsFilter, idOrObjectIdFilter, sanitizeUpdatePayload, findByAnyId } = require("../utils/childCount");
 const { deleteYuvaImages } = require("../utils/s3");
-const { getPublicYuvaById, findYuvaBySlugOrId, pickYuvaFields, resolveYuvaLabels, MEMBER_YUVA_SELECT, MEMBER_PROFILE_KEYS, isHiddenFromMembers, memberBrowseMaritalFilter } = require("../utils/yuvaPublic");
-const {
-  normalizeSlug,
-  slugTaken,
-  createYuvaWithSlug,
-  resolveYuvaSlug,
-  recordSlugHistory,
-  isSlugConflictError,
-  MAX_CREATE_RETRIES,
-} = require("../utils/generateUniqueSlug");
+const { getPublicYuvaById, pickYuvaFields, resolveYuvaLabels, MEMBER_YUVA_SELECT, MEMBER_PROFILE_KEYS, isHiddenFromMembers, memberBrowseMaritalFilter } = require("../utils/yuvaPublic");
 const { verifyToken, errorCheck } = require("../utils/auth");
 const { escapeRegex } = require("../utils/escapeRegex");
 const { containsAny } = require("../utils/caseInsensitiveSearch");
@@ -69,15 +60,6 @@ router.get("/public/:id", async (req, res) => {
     if (!yuva) {
       return res.status(404).json({ message: "Profile not found." });
     }
-    if (yuva.redirectSlug && yuva.redirectSlug !== String(req.params.id)) {
-      const accept = String(req.headers.accept || "");
-      if (accept.includes("text/html")) {
-        const origin =
-          String(process.env.FRONTEND_URL || "").replace(/\/+$/, "") ||
-          "https://yuvadarpan.netlify.app";
-        return res.redirect(301, `${origin}/yuva/${yuva.redirectSlug}`);
-      }
-    }
     res.status(200).json(yuva);
   } catch (e) {
     console.error("yuva public get by id failed", e);
@@ -87,36 +69,6 @@ router.get("/public/:id", async (req, res) => {
 
 router.use(verifyToken());
 attachLinkedRoute(router, "yuva", errorCheck);
-
-router.get("/slug-available", async (req, res) => {
-  try {
-    if (errorCheck(req, res)) {
-      return;
-    }
-    const normalized = normalizeSlug(req.query.slug);
-    if (!normalized.ok) {
-      return res.status(200).json({
-        available: false,
-        slug: normalized.slug,
-        message: normalized.error,
-      });
-    }
-    const excludeId = String(req.query.excludeId || "").trim();
-    const taken = await slugTaken(
-      Yuvalist,
-      normalized.slug,
-      excludeId || undefined,
-    );
-    return res.status(200).json({
-      available: !taken,
-      slug: normalized.slug,
-      message: taken ? "already taken" : "available",
-    });
-  } catch (e) {
-    console.error("slug-available failed", e);
-    return res.status(500).json({ message: "Could not check slug." });
-  }
-});
 
 const toQueryArray = (value) => {
   if (value == null || value === "") {
@@ -536,9 +488,8 @@ router.get("/list/:id", async (req, res) => {
     return;
   }
   try {
-    const { yuva: dbYuva, redirectSlug } = await findYuvaBySlugOrId(
-      req.params.id,
-    );
+    const rows = await findByAnyId(Yuvalist, req.params.id);
+    const dbYuva = Array.isArray(rows) ? rows[0] : rows;
     if (!dbYuva) {
       return res.status(404).json({ message: "Profile not found." });
     }
@@ -549,12 +500,10 @@ router.get("/list/:id", async (req, res) => {
       }
       const picked = pickYuvaFields(withEnGu(dbYuva), MEMBER_PROFILE_KEYS);
       picked.labels = labels;
-      if (redirectSlug) picked.redirectSlug = redirectSlug;
       return res.json(picked);
     }
     const json = withEnGu(dbYuva);
     json.labels = labels;
-    if (redirectSlug) json.redirectSlug = redirectSlug;
     res.json(json);
   } catch (e) {
     console.error("yuva get by id failed", e);
@@ -583,38 +532,30 @@ router.post("/addYuvaList", async (req, res) => {
     return res.status(400).json({ message: "Add at least one Yuva." });
   }
   try {
-    const createdRows = [];
+    const docs = [];
     for (const data of items) {
       const constrained = await constrainYuvaLocationForManager(user, data);
       if (!constrained.ok) {
         return res.status(constrained.status).json({ message: constrained.message });
       }
-      const { email, address, slug: clientSlug, slugManual, ...record } =
-        constrained.data || {};
+      const { email, address, ...record } = constrained.data || {};
       delete record.address;
-      delete record.slug;
       const prepared = prepareYuvaRecord(record);
-      const manual = Boolean(slugManual) && Boolean(String(clientSlug || "").trim());
-      const created = await createYuvaWithSlug(
-        Yuvalist,
-        async (slug) => ({
-          ...prepared,
-          slug,
-          id: uuidv4().replace(/-/g, ""),
-          active: true,
-          createdAt: new Date(),
-          updatedAt: null,
-          createdBy: user.id,
-          updatedBy: null,
-        }),
-        { clientSlug, yuva: prepared, manual },
-      );
-      createdRows.push(created);
+      docs.push({
+        ...prepared,
+        id: uuidv4().replace(/-/g, ""),
+        active: true,
+        createdAt: new Date(),
+        updatedAt: null,
+        createdBy: user.id,
+        updatedBy: null,
+      });
     }
-    await dropStoredGu(createdRows);
     if (isBulk) {
-      recordActivityMany(req, "create", "yuva", createdRows).catch(() => {});
-      createdRows.slice(0, 5).forEach((row) => {
+      const created = await Yuvalist.insertMany(docs);
+      await dropStoredGu(created);
+      recordActivityMany(req, "create", "yuva", created).catch(() => {});
+      created.slice(0, 5).forEach((row) => {
         notifyStaffEvent({
           kind: "NewYuvaAdded",
           subject: row,
@@ -623,12 +564,10 @@ router.post("/addYuvaList", async (req, res) => {
           data: { path: "/yuvalist" },
         });
       });
-      return res.status(200).json({
-        data: createdRows.map(withEnGu),
-        count: createdRows.length,
-      });
+      return res.status(200).json({ data: created.map(withEnGu), count: created.length });
     }
-    const created = createdRows[0];
+    const created = await Yuvalist.create(docs[0]);
+    await dropStoredGu([created]);
     recordActivity({
       req,
       action: "create",
@@ -650,7 +589,7 @@ router.post("/addYuvaList", async (req, res) => {
     return res.status(200).json(withEnGu(plain));
   } catch (e) {
     console.error("add yuva failed", e);
-    return res.status(e.status || 500).json({
+    return res.status(500).json({
       message: e?.message || String(e),
     });
   }
@@ -757,44 +696,11 @@ router.patch("/update/:id", async (req, res) => {
       return res.status(constrained.status).json({ message: constrained.message });
     }
     const previous = allowed.toObject ? allowed.toObject() : { ...allowed };
-    const clientSlug = constrained.data?.slug;
-    const slugManual = Boolean(constrained.data?.slugManual);
     const payload = sanitizeUpdatePayload(prepareYuvaRecord(constrained.data));
     delete payload.email;
     delete payload.address;
-    delete payload.slug;
-    delete payload.slugManual;
     delete previous.email;
     delete previous.address;
-
-    if (clientSlug != null && String(clientSlug).trim() !== "") {
-      let lastError;
-      for (let attempt = 0; attempt < MAX_CREATE_RETRIES; attempt += 1) {
-        try {
-          const nextSlug = await resolveYuvaSlug(Yuvalist, {
-            clientSlug: attempt === 0 ? clientSlug : "",
-            yuva: { ...previous, ...payload },
-            excludeId: allowed._id,
-            manual: attempt === 0 && slugManual,
-          });
-          if (previous.slug && previous.slug !== nextSlug) {
-            await recordSlugHistory({
-              entityId: allowed._id,
-              oldSlug: previous.slug,
-            });
-          }
-          payload.slug = nextSlug;
-          lastError = null;
-          break;
-        } catch (error) {
-          lastError = error;
-          if (error.status === 400) throw error;
-          if (!isSlugConflictError(error)) throw error;
-        }
-      }
-      if (lastError) throw lastError;
-    }
-
     await Yuvalist.updateOne(filter, {
       $set: {
         ...payload,
