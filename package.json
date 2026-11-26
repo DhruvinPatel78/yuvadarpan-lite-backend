@@ -28,7 +28,6 @@
     "dotenv": "^16.3.1",
     "exceljs": "^4.4.0",
     "express": "^4.19.2",
-    "firebase-admin": "^13.4.0",
     "fontkit": "^2.0.4",
     "gridfs-stream": "^1.1.1",
     "jsonwebtoken": "^9.0.2",

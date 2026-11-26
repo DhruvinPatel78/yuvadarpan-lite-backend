@@ -15,11 +15,9 @@ const District = require("../models/district");
 const City = require("../models/city");
 const Samaj = require("../models/samaj");
 const { v4: uuidv4 } = require("uuid");
-const { sendNotification } = require("../utils/fcm");
 const { notifyAccountEvent, notifyStatusChange } = require("../utils/accountMail");
 const { notifyStaffEvent } = require("../utils/notifyStaff");
 const appMessages = require("../utils/appMessages");
-const notification = require("../data/locale/notifications.json");
 const { escapeRegex } = require("../utils/escapeRegex");
 const { containsAny, mergeAnd } = require("../utils/caseInsensitiveSearch");
 const {
@@ -332,7 +330,6 @@ router.get("/getInfo/:id", async (req, res) => {
     return res.status(404).json({ message: appMessages.userNotFound });
   }
   delete user.password;
-  delete user.fcmToken;
   const mongoId = user._id;
   user.id = mongoId;
   delete user._id;
@@ -628,7 +625,6 @@ router.post("/add", async (req, res) => {
       updatedBy: null,
       active: true,
       allowed: isAdmin,
-      fcmToken: user.fcmToken || null,
       language: user.language === "en" ? "en" : "gu",
     });
     await savePermissionForUser(
@@ -692,13 +688,6 @@ router.post("/signup", async (req, res) => {
             ? appMessages.emailExists
             : appMessages.mobileExists;
 
-      user?.fcmToken &&
-        (await sendNotification(
-          user?.fcmToken,
-          notification.RegistrationFail.title.en,
-          errorMessage,
-        ));
-
       return res.status(401).json({ message: errorMessage });
     }
 
@@ -715,7 +704,6 @@ router.post("/signup", async (req, res) => {
       role: "USER",
       roleRank: getRoleRank("USER"),
       allowed: false,
-      fcmToken: user.fcmToken || null,
       language: user.language === "en" ? "en" : "gu",
     });
     await notifyAccountEvent(dbUser, "RegistrationSuccess");
@@ -1265,59 +1253,6 @@ router.patch("/approveRejectMany", async (req, res) => {
     );
 
     res.status(200).json({ message: appMessages.updated });
-  }
-});
-
-router.patch("/fcmTokenUpdate/:id", async (req, res) => {
-  if (errorCheck(req, res)) {
-    return;
-  }
-  const { id } = req.params;
-  const fcmToken = req.body?.fcmToken;
-
-  const currentUser =
-    (await User.findById(id).lean()) ||
-    (await User.findOne(idOrObjectIdFilter(String(id))).lean());
-
-  if (!currentUser) {
-    return res.status(404).json({ message: appMessages.userNotFound });
-  }
-
-  const isSelf =
-    String(req.user?.id) === String(id) ||
-    String(req.user?.id) === String(currentUser._id) ||
-    String(req.user?.id) === String(currentUser.id);
-  const actorIsAdmin = isAdminRole(req.user?.role);
-
-  if (!isSelf && !actorIsAdmin) {
-    return res.status(403).json({ message: appMessages.notAllowed });
-  }
-  if (isAdminRole(currentUser.role) && !actorIsAdmin) {
-    return res.status(403).json({ message: appMessages.notAllowed });
-  }
-
-  await User.updateOne(
-    { _id: currentUser._id },
-    { $set: { fcmToken, updatedAt: new Date(), updatedBy: req.user.id } },
-  );
-  res.status(200).json({ message: appMessages.updated });
-});
-
-router.post("/test", async (req, res) => {
-  const user = req.body;
-  console.log("user", user);
-  if (user.fcmToken) {
-    try {
-      await sendNotification(
-        user.fcmToken,
-        "Test Notification",
-        "Test Notification send and receive successfully.",
-      );
-    } catch (err) {
-      console.log("FCM notification error:", err);
-    }
-  } else {
-    console.log("FCM token is required");
   }
 });
 
