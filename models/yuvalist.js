@@ -59,6 +59,13 @@ const yuvaListSchema = new mongoose.Schema({
     type: String,
     required: true,
   },
+  slug: {
+    type: String,
+    trim: true,
+    unique: true,
+    sparse: true,
+    index: true,
+  },
   dob: {
     type: Date,
     required: true,

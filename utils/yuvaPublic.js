@@ -8,10 +8,11 @@ const Vibhag = require("../models/vibhag");
 const District = require("../models/district");
 const City = require("../models/city");
 const Samaj = require("../models/samaj");
-const { findByAnyId } = require("./childCount");
+const { findByAnyId, idOrObjectIdFilter } = require("./childCount");
 const { nameText } = require("./masterName");
 const { withEnGu } = require("./yuvaGu");
 const { escapeRegex } = require("./escapeRegex");
+const SlugHistory = require("../models/slugHistory");
 
 const MEMBER_HIDDEN_MARITAL = {
   engaged: ["engaged", "Engaged", "વગ્દાન"],
@@ -128,6 +129,7 @@ const sanitizeYuvaId = (value) => {
 
 const MEMBER_YUVA_KEYS = [
   "id",
+  "slug",
   "firstName",
   "fatherName",
   "grandFatherName",
@@ -191,20 +193,58 @@ const pickYuvaFields = (yuva, keys) => {
   return picked;
 };
 
+const findYuvaBySlugOrId = async (raw) => {
+  const key = sanitizeYuvaId(raw);
+  if (!key) {
+    return { yuva: null, redirectSlug: null };
+  }
+
+  let yuva = await Yuvalist.findOne({ slug: key });
+  if (yuva) {
+    return { yuva, redirectSlug: null };
+  }
+
+  const history = await SlugHistory.findOne({
+    slug: key,
+    entityType: "YuvaList",
+  }).lean();
+  if (history?.entityId) {
+    yuva =
+      (await Yuvalist.findById(history.entityId)) ||
+      (await Yuvalist.findOne(idOrObjectIdFilter(String(history.entityId))));
+    if (yuva?.slug) {
+      return { yuva, redirectSlug: yuva.slug };
+    }
+  }
+
+  const rows = await findByAnyId(Yuvalist, key);
+  yuva = Array.isArray(rows) ? rows[0] : rows;
+  if (!yuva) {
+    return { yuva: null, redirectSlug: null };
+  }
+  return {
+    yuva,
+    redirectSlug: yuva.slug && yuva.slug !== key ? yuva.slug : null,
+  };
+};
+
 const getPublicYuvaById = async (id) => {
-  const rows = await findByAnyId(Yuvalist, sanitizeYuvaId(id));
-  const yuva = Array.isArray(rows) ? rows[0] : rows;
+  const { yuva, redirectSlug } = await findYuvaBySlugOrId(id);
   if (!yuva) {
     return null;
   }
   const json = pickYuvaFields(withEnGu(yuva), PUBLIC_PROFILE_KEYS);
   json.labels = await resolveYuvaLabels(yuva);
   delete json.email;
+  if (redirectSlug) {
+    json.redirectSlug = redirectSlug;
+  }
   return json;
 };
 
 module.exports = {
   getPublicYuvaById,
+  findYuvaBySlugOrId,
   pickYuvaFields,
   resolveYuvaLabels,
   sanitizeYuvaId,
