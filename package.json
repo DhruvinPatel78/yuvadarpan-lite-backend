@@ -10,6 +10,7 @@
     "start": "node server.js",
     "start:staging": "node server.js staging",
     "start:production": "node server.js production",
+    "test": "node --test tests/*.test.js",
     "remove-address": "node scripts/removeYuvaAddress.js",
     "remove-address:staging": "node scripts/removeYuvaAddress.js staging",
     "remove-address:production": "node scripts/removeYuvaAddress.js production"
