@@ -2,27 +2,38 @@ const express = require("express");
 const router = express.Router();
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
+const ExcelJS = require("exceljs");
 const { verifyToken } = require("../utils/auth");
 const User = require("../models/user");
 const OtpGenerator = require("otp-generator");
 const OTP = require("../models/OTP");
+const Country = require("../models/country");
+const State = require("../models/state");
 const Region = require("../models/region");
+const Vibhag = require("../models/vibhag");
+const District = require("../models/district");
+const City = require("../models/city");
+const Samaj = require("../models/samaj");
 const { v4: uuidv4 } = require("uuid");
 const { notifyAccountEvent, notifyStatusChange } = require("../utils/accountMail");
 const { notifyStaffEvent } = require("../utils/notifyStaff");
 const appMessages = require("../utils/appMessages");
 const { escapeRegex } = require("../utils/escapeRegex");
 const { containsAny, mergeAnd } = require("../utils/caseInsensitiveSearch");
-const { idOrObjectIdFilter } = require("../utils/childCount");
+const {
+  idOrObjectIdFilter,
+  idsFilter,
+  parentIdFilter,
+} = require("../utils/childCount");
 const {
   findAccountByTokenId,
+  countryValueKeys,
+  stateValueKeys,
+  regionValueKeys,
+  vibhagValueKeys,
+  districtValueKeys,
+  cityValueKeys,
   samajValueKeys,
-  usersInManagerCityQuery,
-  usersInManagerDistrictQuery,
-  usersInManagerVibhagQuery,
-  usersInManagerRegionQuery,
-  usersInManagerStateQuery,
-  usersInManagerCountryQuery,
   samajIdsForCity,
   samajIdsForDistrict,
   samajIdsForVibhag,
@@ -35,7 +46,6 @@ const {
   getManagerRegionId,
   getManagerStateId,
   getManagerCountryId,
-  regionValueKeys,
   regionIdsForState,
   regionIdsForCountry,
   isAdmin: isAdminRole,
@@ -47,7 +57,16 @@ const {
   recordActivityMany,
   inferUserAction,
 } = require("../utils/activityLog");
-const { enrichUserLocation } = require("../utils/userLocation");
+const {
+  enrichUserLocation,
+  ensureUsersLocationAndRankBackfilled,
+} = require("../utils/userLocation");
+const {
+  buildUserVisibilityFilter,
+  USER_LEVEL_FIELD_BY_ROLE,
+  getRoleRank,
+  normalizeRole,
+} = require("../utils/userVisibility");
 const {
   asPermissionObject,
   getPermissionByUserId,
@@ -167,6 +186,132 @@ const limitResetAttempts = (req, res, next) => {
 const canManageUsers = (role) =>
   isAdminRole(role) || isLocationMasterReadOnly(role);
 
+const LEVEL_KEY_RESOLVER = {
+  country: countryValueKeys,
+  state: stateValueKeys,
+  region: regionValueKeys,
+  vibhag: vibhagValueKeys,
+  district: districtValueKeys,
+  city: cityValueKeys,
+  localSamaj: samajValueKeys,
+};
+
+const USER_SORT_FIELDS = new Set([
+  "id",
+  "familyId",
+  "firstName",
+  "lastName",
+  "role",
+  "roleRank",
+  "email",
+  "allowed",
+  "active",
+  "createdAt",
+  "updatedAt",
+]);
+
+const buildUserSort = (query = {}) => {
+  const sortBy = String(query.sortBy || "").trim();
+  if (!USER_SORT_FIELDS.has(sortBy)) {
+    return { id: -1 };
+  }
+  const sortOrder =
+    String(query.sortOrder || "").trim().toLowerCase() === "asc" ? 1 : -1;
+  return { [sortBy]: sortOrder };
+};
+
+const getViewerVisibilityFilter = async (reqUser) => {
+  await ensureUsersLocationAndRankBackfilled();
+  const viewerDoc = await findAccountByTokenId(reqUser?.id);
+  if (!viewerDoc) {
+    return {
+      viewer: null,
+      visibilityFilter: buildUserVisibilityFilter(null),
+      locationKeys: [],
+      levelField: null,
+    };
+  }
+  const plainViewer = viewerDoc.toObject
+    ? viewerDoc.toObject()
+    : { ...viewerDoc };
+  const { user: enrichedViewer, patch } = await enrichUserLocation(plainViewer);
+  if (Object.keys(patch).length && viewerDoc._id) {
+    await User.updateOne({ _id: viewerDoc._id }, { $set: patch });
+  }
+  const normalizedRole = normalizeRole(enrichedViewer.role);
+  const levelField = USER_LEVEL_FIELD_BY_ROLE[normalizedRole] || null;
+  const keyResolver = levelField ? LEVEL_KEY_RESOLVER[levelField] : null;
+  const locationKeys =
+    keyResolver && enrichedViewer[levelField]
+      ? await keyResolver(enrichedViewer[levelField])
+      : undefined;
+  const visibilityFilter = buildUserVisibilityFilter(enrichedViewer, {
+    locationKeys,
+  });
+  return {
+    viewer: enrichedViewer,
+    visibilityFilter,
+    locationKeys: locationKeys || [],
+    levelField,
+  };
+};
+
+const buildUserQueryFilter = async (reqQuery = {}) => {
+  const lastName = asQueryList(reqQuery.lastName);
+  const country = asQueryList(reqQuery.country);
+  const state = asQueryList(reqQuery.state);
+  const region = asQueryList(reqQuery.region);
+  const vibhag = asQueryList(reqQuery.vibhag);
+  const district = asQueryList(reqQuery.district);
+  const city = asQueryList(reqQuery.city);
+  const samaj = asQueryList(reqQuery.samaj || reqQuery.localSamaj);
+  const roles = asQueryList(reqQuery.roles).map(normalizeRole).filter(Boolean);
+  const { familyId, firstName, mobile, email, gender } = reqQuery;
+
+  const [
+    CountryFilter,
+    StateFilter,
+    RegionFilter,
+    VibhagFilter,
+    DistrictFilter,
+    CityFilter,
+    SamajFilter,
+  ] = await Promise.all([
+    parentIdFilter("country", country, Country),
+    parentIdFilter("state", state, State),
+    parentIdFilter("region", region, Region),
+    parentIdFilter("vibhag", vibhag, Vibhag),
+    parentIdFilter("district", district, District),
+    parentIdFilter("city", city, City),
+    parentIdFilter("localSamaj", samaj, Samaj),
+  ]);
+
+  const Roles = roles.length > 0 ? { role: { $in: roles } } : {};
+  const LastName = lastName.length > 0 ? { lastName: { $in: lastName } } : {};
+  const FamilyId = idContains("familyId", familyId);
+  const FirstName = textContains(firstName, ["firstName", "middleName"]);
+  const Mobile = textContains(mobile, ["mobile"]);
+  const Email = textContains(email, ["email"]);
+  const Gender = genderFilter(gender);
+
+  return mergeAnd(
+    LastName,
+    CountryFilter,
+    StateFilter,
+    RegionFilter,
+    VibhagFilter,
+    DistrictFilter,
+    CityFilter,
+    SamajFilter,
+    FamilyId,
+    FirstName,
+    Mobile,
+    Gender,
+    Email,
+    Roles,
+  );
+};
+
 router.use(verifyToken());
 attachLinkedRoute(router, "user", errorCheck);
 
@@ -174,12 +319,13 @@ router.get("/getInfo/:id", async (req, res) => {
   if (errorCheck(req, res)) {
     return;
   }
-  if (String(req.user?.role || "").toUpperCase() === "USER") {
+  if (!canManageUsers(req.user?.role)) {
     return res.status(403).json({ message: appMessages.notAllowed });
   }
-  const user =
-    (await User.findById(req.params.id).lean()) ||
-    (await User.findOne(idOrObjectIdFilter(String(req.params.id))).lean());
+  const { visibilityFilter } = await getViewerVisibilityFilter(req.user);
+  const user = await User.findOne(
+    mergeAnd(idOrObjectIdFilter(String(req.params.id)), visibilityFilter),
+  ).lean();
   if (!user) {
     return res.status(404).json({ message: appMessages.userNotFound });
   }
@@ -218,114 +364,95 @@ router.get("/list", async (req, res) => {
     if (!canManageUsers(req.user?.role)) {
       return res.status(403).json({ message: appMessages.notAllowed });
     }
-    const { id, role } = req.user;
-    const lastName = asQueryList(req.query.lastName);
-    const region = asQueryList(req.query.region);
-    const vibhag = asQueryList(req.query.vibhag);
-    const samaj = asQueryList(req.query.samaj);
-    const roles = asQueryList(req.query.roles);
-    const state = asQueryList(req.query.state);
-    const {
-      familyId,
-      firstName,
-      mobile,
-      email,
-      gender,
-    } = req.query;
     const page = parseInt(req.query.page, 10) || 1;
     const limit = parseInt(req.query.limit, 10) || 10;
     const offset = (page - 1) * limit;
-    const Roles =
-      roles.length > 0
-        ? {
-            role: { $in: roles },
-          }
-        : {};
-    const LastName =
-      lastName.length > 0
-        ? {
-            lastName: { $in: lastName },
-          }
-        : {};
-    const FamilyId = idContains("familyId", familyId);
-    const FirstName = textContains(firstName, ["firstName", "middleName"]);
-    const Mobile = textContains(mobile, ["mobile"]);
-    const Email = textContains(email, ["email"]);
-    const Gender = genderFilter(gender);
-
-    const RegionData =
-      state.length > 0
-        ? await Region.findOne({
-            state_id: { $in: state },
-          })
-        : null;
-    const State = RegionData
-      ? {
-          region: { $eq: RegionData?.id },
-        }
-      : {};
-    const CurrentRegion =
-      region?.length > 0
-        ? {
-            region: { $in: region },
-          }
-        : {};
-    const CurrentVibhag =
-      vibhag?.length > 0
-        ? {
-            vibhag: { $in: vibhag },
-          }
-        : {};
-    const CurrentSamaj =
-      samaj?.length > 0
-        ? {
-            localSamaj: { $in: samaj },
-          }
-        : {};
-    const filterSearch = mergeAnd(
-      LastName,
-      State,
-      CurrentRegion,
-      CurrentVibhag,
-      CurrentSamaj,
-      FamilyId,
-      FirstName,
-      Mobile,
-      Gender,
-      Email,
-      Roles
-    );
-    let query = filterSearch;
-    if (role !== "ADMIN") {
-      const manager = await findAccountByTokenId(id);
-      if (role === "SAMAJ_MANAGER") {
-        query = mergeAnd(query, {
-          localSamaj: { $in: await samajValueKeys(manager?.localSamaj) },
-        });
-      } else if (role === "CITY_MANAGER") {
-        query = mergeAnd(query, await usersInManagerCityQuery(manager));
-      } else if (role === "DISTRICT_MANAGER") {
-        query = mergeAnd(query, await usersInManagerDistrictQuery(manager));
-      } else if (role === "VIBHAG_MANAGER") {
-        query = mergeAnd(query, await usersInManagerVibhagQuery(manager));
-      } else if (role === "REGION_MANAGER") {
-        query = mergeAnd(query, await usersInManagerRegionQuery(manager));
-      } else if (role === "STATE_MANAGER") {
-        query = mergeAnd(query, await usersInManagerStateQuery(manager));
-      } else if (role === "COUNTRY_MANAGER") {
-        query = mergeAnd(query, await usersInManagerCountryQuery(manager));
-      }
-    }
-    const users = await User.find(query)
-      .select("-password")
-      .sort({ id: -1 })
-      .skip(offset)
-      .limit(limit)
-      .exec();
-    const totalItems = await User.countDocuments(query);
+    const [{ visibilityFilter }, filterSearch] = await Promise.all([
+      getViewerVisibilityFilter(req.user),
+      buildUserQueryFilter(req.query),
+    ]);
+    const query = mergeAnd(visibilityFilter, filterSearch);
+    const sort = buildUserSort(req.query);
+    const [users, totalItems] = await Promise.all([
+      User.find(query)
+        .select("-password -fcmToken")
+        .sort(sort)
+        .skip(offset)
+        .limit(limit)
+        .exec(),
+      User.countDocuments(query),
+    ]);
     const totalPages = Math.ceil(totalItems / limit);
     res.status(200).json({ total: totalItems, page, totalPages, data: users });
   }
+});
+
+router.get("/export", async (req, res) => {
+  if (errorCheck(req, res)) {
+    return;
+  }
+  if (!canManageUsers(req.user?.role)) {
+    return res.status(403).json({ message: appMessages.notAllowed });
+  }
+  const format = String(req.query.format || "csv").trim().toLowerCase();
+  if (format !== "csv" && format !== "xlsx") {
+    return res.status(400).json({ message: "Choose CSV or XLSX." });
+  }
+  const [{ visibilityFilter }, filterSearch] = await Promise.all([
+    getViewerVisibilityFilter(req.user),
+    buildUserQueryFilter(req.query),
+  ]);
+  const query = mergeAnd(visibilityFilter, filterSearch);
+  const sort = buildUserSort(req.query);
+  const users = await User.find(query)
+    .select("-password -fcmToken")
+    .sort(sort)
+    .lean();
+
+  const workbook = new ExcelJS.Workbook();
+  const sheet = workbook.addWorksheet("Users");
+  sheet.columns = [
+    { header: "Family ID", key: "familyId", width: 14 },
+    { header: "First Name", key: "firstName", width: 18 },
+    { header: "Middle Name", key: "middleName", width: 18 },
+    { header: "Last Name", key: "lastName", width: 18 },
+    { header: "Role", key: "role", width: 18 },
+    { header: "Email", key: "email", width: 28 },
+    { header: "Mobile", key: "mobile", width: 16 },
+    { header: "Gender", key: "gender", width: 12 },
+    { header: "Allowed", key: "allowed", width: 10 },
+    { header: "Active", key: "active", width: 10 },
+  ];
+  users.forEach((row) => {
+    sheet.addRow({
+      familyId: row.familyId ?? "",
+      firstName: row.firstName || "",
+      middleName: row.middleName || "",
+      lastName: row.lastName || "",
+      role: row.role || "",
+      email: row.email || "",
+      mobile: row.mobile || "",
+      gender: row.gender || "",
+      allowed: row.allowed ? "Yes" : "No",
+      active: row.active ? "Yes" : "No",
+    });
+  });
+
+  if (format === "xlsx") {
+    res.setHeader(
+      "Content-Type",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    );
+    res.setHeader("Content-Disposition", 'attachment; filename="users.xlsx"');
+    await workbook.xlsx.write(res);
+    res.end();
+    return;
+  }
+
+  res.setHeader("Content-Type", "text/csv; charset=utf-8");
+  res.setHeader("Content-Disposition", 'attachment; filename="users.csv"');
+  await workbook.csv.write(res);
+  res.end();
 });
 
 router.get("/requests", async (req, res) => {
@@ -333,233 +460,31 @@ router.get("/requests", async (req, res) => {
     if (!canManageUsers(req.user?.role)) {
       return res.status(403).json({ message: appMessages.notAllowed });
     }
-    const { id, role } = req.user;
-    const lastName = asQueryList(req.query.lastName);
-    const region = asQueryList(req.query.region);
-    const vibhag = asQueryList(req.query.vibhag);
-    const samaj = asQueryList(req.query.samaj);
-    const roles = asQueryList(req.query.roles);
-    const state = asQueryList(req.query.state);
-    const {
-      familyId,
-      firstName,
-      mobile,
-      email,
-      gender,
-    } = req.query;
     const page = parseInt(req.query.page, 10) || 1;
     const limit = parseInt(req.query.limit, 10) || 10;
     const offset = (page - 1) * limit;
-    const Roles =
-      roles.length > 0
-        ? {
-            role: { $in: roles },
-          }
-        : {};
-    const LastName =
-      lastName.length > 0
-        ? {
-            lastName: { $in: lastName },
-          }
-        : {};
-    const FamilyId = idContains("familyId", familyId);
-    const FirstName = textContains(firstName, ["firstName", "middleName"]);
-    const Mobile = textContains(mobile, ["mobile"]);
-    const Email = textContains(email, ["email"]);
-    const Gender = genderFilter(gender);
-
-    const RegionData =
-      state.length > 0
-        ? await Region.findOne({
-            state_id: { $in: state },
-          })
-        : null;
-    const State = RegionData
-      ? {
-          region: { $eq: RegionData?.id },
-        }
-      : {};
-    const CurrentRegion =
-      region?.length > 0
-        ? {
-            region: { $in: region },
-          }
-        : {};
-    const CurrentVibhag =
-      vibhag?.length > 0
-        ? {
-            vibhag: { $in: vibhag },
-          }
-        : {};
-    const CurrentSamaj =
-      samaj?.length > 0
-        ? {
-            localSamaj: { $in: samaj },
-          }
-        : {};
-    const filterSearch = mergeAnd(
-      LastName,
-      State,
-      CurrentRegion,
-      CurrentVibhag,
-      CurrentSamaj,
-      FamilyId,
-      FirstName,
-      Mobile,
-      Gender,
-      Email,
-      Roles
-    );
-    const pendingQuery = mergeAnd(
+    const [{ visibilityFilter }, filterSearch] = await Promise.all([
+      getViewerVisibilityFilter(req.user),
+      buildUserQueryFilter(req.query),
+    ]);
+    const query = mergeAnd(
+      visibilityFilter,
       { allowed: { $eq: false } },
       { $or: [{ active: true }, { updatedAt: null }] },
-      filterSearch
+      filterSearch,
     );
-    if (role === "ADMIN") {
-      const users = await User.find(pendingQuery)
-        .sort({ id: -1 })
+    const sort = buildUserSort(req.query);
+    const [users, totalItems] = await Promise.all([
+      User.find(query)
+        .select("-password -fcmToken")
+        .sort(sort)
         .skip(offset)
         .limit(limit)
-        .exec();
-      const totalItems = await User.countDocuments(pendingQuery);
-      const totalPages = Math.ceil(totalItems / limit);
-      res
-        .status(200)
-        .json({ total: totalItems, page, totalPages, data: users });
-    } else if (role === "REGION_MANAGER") {
-      const manager = await findAccountByTokenId(id);
-      const managerPendingQuery = mergeAnd(
-        pendingQuery,
-        await usersInManagerRegionQuery(manager)
-      );
-      const MangerUsers = await User.find(managerPendingQuery)
-        .sort({ id: -1 })
-        .skip(offset)
-        .limit(limit)
-        .exec();
-      const managerTotalItem = await User.countDocuments(managerPendingQuery);
-      const totalPages = Math.ceil(managerTotalItem / limit);
-      res.status(200).json({
-        total: managerTotalItem,
-        page,
-        totalPages,
-        data: MangerUsers,
-      });
-    } else if (role === "STATE_MANAGER") {
-      const manager = await findAccountByTokenId(id);
-      const managerPendingQuery = mergeAnd(
-        pendingQuery,
-        await usersInManagerStateQuery(manager)
-      );
-      const MangerUsers = await User.find(managerPendingQuery)
-        .sort({ id: -1 })
-        .skip(offset)
-        .limit(limit)
-        .exec();
-      const managerTotalItem = await User.countDocuments(managerPendingQuery);
-      const totalPages = Math.ceil(managerTotalItem / limit);
-      res.status(200).json({
-        total: managerTotalItem,
-        page,
-        totalPages,
-        data: MangerUsers,
-      });
-    } else if (role === "COUNTRY_MANAGER") {
-      const manager = await findAccountByTokenId(id);
-      const managerPendingQuery = mergeAnd(
-        pendingQuery,
-        await usersInManagerCountryQuery(manager)
-      );
-      const MangerUsers = await User.find(managerPendingQuery)
-        .sort({ id: -1 })
-        .skip(offset)
-        .limit(limit)
-        .exec();
-      const managerTotalItem = await User.countDocuments(managerPendingQuery);
-      const totalPages = Math.ceil(managerTotalItem / limit);
-      res.status(200).json({
-        total: managerTotalItem,
-        page,
-        totalPages,
-        data: MangerUsers,
-      });
-    } else if (role === "SAMAJ_MANAGER") {
-      const mangerSamaj = await findAccountByTokenId(id);
-      const samajKeys = await samajValueKeys(mangerSamaj?.localSamaj);
-      const managerPendingQuery = mergeAnd(pendingQuery, {
-        localSamaj: { $in: samajKeys },
-      });
-      const MangerUsers = await User.find(managerPendingQuery)
-        .sort({ id: -1 })
-        .skip(offset)
-        .limit(limit)
-        .exec();
-      const managerTotalItem = await User.countDocuments(managerPendingQuery);
-      const totalPages = Math.ceil(managerTotalItem / limit);
-      res.status(200).json({
-        total: managerTotalItem,
-        page,
-        totalPages,
-        data: MangerUsers,
-      });
-    } else if (role === "CITY_MANAGER") {
-      const manager = await findAccountByTokenId(id);
-      const managerPendingQuery = mergeAnd(
-        pendingQuery,
-        await usersInManagerCityQuery(manager)
-      );
-      const MangerUsers = await User.find(managerPendingQuery)
-        .sort({ id: -1 })
-        .skip(offset)
-        .limit(limit)
-        .exec();
-      const managerTotalItem = await User.countDocuments(managerPendingQuery);
-      const totalPages = Math.ceil(managerTotalItem / limit);
-      res.status(200).json({
-        total: managerTotalItem,
-        page,
-        totalPages,
-        data: MangerUsers,
-      });
-    } else if (role === "DISTRICT_MANAGER") {
-      const manager = await findAccountByTokenId(id);
-      const managerPendingQuery = mergeAnd(
-        pendingQuery,
-        await usersInManagerDistrictQuery(manager)
-      );
-      const MangerUsers = await User.find(managerPendingQuery)
-        .sort({ id: -1 })
-        .skip(offset)
-        .limit(limit)
-        .exec();
-      const managerTotalItem = await User.countDocuments(managerPendingQuery);
-      const totalPages = Math.ceil(managerTotalItem / limit);
-      res.status(200).json({
-        total: managerTotalItem,
-        page,
-        totalPages,
-        data: MangerUsers,
-      });
-    } else if (role === "VIBHAG_MANAGER") {
-      const manager = await findAccountByTokenId(id);
-      const managerPendingQuery = mergeAnd(
-        pendingQuery,
-        await usersInManagerVibhagQuery(manager)
-      );
-      const MangerUsers = await User.find(managerPendingQuery)
-        .sort({ id: -1 })
-        .skip(offset)
-        .limit(limit)
-        .exec();
-      const managerTotalItem = await User.countDocuments(managerPendingQuery);
-      const totalPages = Math.ceil(managerTotalItem / limit);
-      res.status(200).json({
-        total: managerTotalItem,
-        page,
-        totalPages,
-        data: MangerUsers,
-      });
-    }
+        .exec(),
+      User.countDocuments(query),
+    ]);
+    const totalPages = Math.ceil(totalItems / limit);
+    res.status(200).json({ total: totalItems, page, totalPages, data: users });
   }
 });
 
@@ -686,10 +611,13 @@ router.post("/add", async (req, res) => {
         return res.status(403).json({ message: appMessages.notAllowed });
       }
     }
+    user.role = normalizeRole(user.role || "USER") || "USER";
     const { user: withLocation } = await enrichUserLocation(user);
     delete withLocation.Permission;
     const dbUser = await User.create({
       ...withLocation,
+      role: user.role,
+      roleRank: getRoleRank(user.role),
       id: uuidv4().replace(/-/g, ""),
       createdAt: new Date(),
       updatedAt: null,
@@ -774,6 +702,7 @@ router.post("/signup", async (req, res) => {
       updatedBy: null,
       active: true,
       role: "USER",
+      roleRank: getRoleRank("USER"),
       allowed: false,
       language: user.language === "en" ? "en" : "gu",
     });
@@ -907,27 +836,43 @@ router.patch("/update/:id", async (req, res) => {
       payload.language = payload.language === "en" ? "en" : "gu";
     }
 
-    // Get current user data before update
-    const currentUser =
-      (await User.findById(id).lean()) ||
-      (await User.findOne(idOrObjectIdFilter(String(id))).lean());
+    const actorIsAdmin = isAdminRole(req.user?.role);
+    const actorCanManage = canManageUsers(req.user?.role);
 
-    if (!currentUser) {
-      return res.status(404).json({ message: appMessages.userNotFound });
+    let currentUser = null;
+    let visibilityMeta = null;
+
+    if (actorCanManage) {
+      visibilityMeta = await getViewerVisibilityFilter(req.user);
+      currentUser = await User.findOne(
+        mergeAnd(idOrObjectIdFilter(String(id)), visibilityMeta.visibilityFilter),
+      ).lean();
+      if (!currentUser) {
+        return res.status(404).json({ message: appMessages.userNotFound });
+      }
+    } else {
+      await ensureUsersLocationAndRankBackfilled();
+      currentUser = await User.findOne(idOrObjectIdFilter(String(id))).lean();
+      if (!currentUser) {
+        return res.status(404).json({ message: appMessages.userNotFound });
+      }
     }
 
     const isSelf =
       String(req.user.id) === String(id) ||
       String(req.user.id) === String(currentUser._id) ||
       String(req.user.id) === String(currentUser.id);
-    const actorIsAdmin = String(req.user.role || "").toUpperCase() === "ADMIN";
 
-    if (!isSelf && !canManageUsers(req.user.role)) {
+    if (!isSelf && !actorCanManage) {
       return res.status(403).json({ message: appMessages.notAllowed });
+    }
+    if (isAdminRole(currentUser.role) && !actorIsAdmin) {
+      return res.status(404).json({ message: appMessages.userNotFound });
     }
 
     if (isSelf) {
       delete payload.role;
+      delete payload.roleRank;
       delete payload.password;
       delete payload.Permission;
       if (!actorIsAdmin) {
@@ -940,139 +885,82 @@ router.patch("/update/:id", async (req, res) => {
     const permissionTouched =
       Object.prototype.hasOwnProperty.call(payload, "Permission") ||
       Boolean(payload.role);
-    // Only admins assign manager Permission flags (stored in Permission collection).
+    // Only admins assign roles and manager Permission flags.
     if (!actorIsAdmin) {
+      delete payload.role;
+      delete payload.roleRank;
       delete payload.Permission;
-    } else if (permissionTouched) {
-      const nextRole = payload.role || currentUser.role;
-      const existing = await getPermissionByUserId(currentUser._id);
-      nextPermission = normalizePermissionForRole(
-        nextRole,
-        Object.prototype.hasOwnProperty.call(payload, "Permission")
-          ? payload.Permission
-          : existing,
-      );
+    } else {
+      if (payload.role) {
+        if (typeof payload.role === "object") {
+          payload.role = payload.role.value || payload.role.id || currentUser.role;
+        }
+        payload.role = normalizeRole(payload.role);
+        payload.roleRank = getRoleRank(payload.role);
+      }
+      if (permissionTouched) {
+        const nextRole = payload.role || currentUser.role;
+        const existing = await getPermissionByUserId(currentUser._id);
+        nextPermission = normalizePermissionForRole(
+          nextRole,
+          Object.prototype.hasOwnProperty.call(payload, "Permission")
+            ? payload.Permission
+            : existing,
+        );
+      }
     }
     delete payload.Permission;
 
-    if (!isSelf && req.user.role === "SAMAJ_MANAGER") {
-      const manager = await findAccountByTokenId(req.user.id);
-      const samajKeys = await samajValueKeys(manager?.localSamaj);
-      if (!samajKeys.includes(String(currentUser.localSamaj))) {
-        return res.status(403).json({ message: appMessages.notAllowed });
-      }
-      delete payload.role;
-    }
-    if (!isSelf && req.user.role === "CITY_MANAGER") {
-      const manager = await findAccountByTokenId(req.user.id);
-      const inCity = await User.findOne({
-        _id: currentUser._id,
-        ...(await usersInManagerCityQuery(manager)),
-      });
-      if (!inCity) {
-        return res.status(403).json({ message: appMessages.notAllowed });
-      }
-      delete payload.role;
-      if (payload.localSamaj) {
-        const samajIds = await samajIdsForCity(await getManagerCityId(manager));
-        if (!samajIds.includes(String(payload.localSamaj))) {
-          return res.status(403).json({ message: appMessages.notAllowed });
-        }
-      }
-    }
-    if (!isSelf && req.user.role === "DISTRICT_MANAGER") {
-      const manager = await findAccountByTokenId(req.user.id);
-      const inDistrict = await User.findOne({
-        _id: currentUser._id,
-        ...(await usersInManagerDistrictQuery(manager)),
-      });
-      if (!inDistrict) {
-        return res.status(403).json({ message: appMessages.notAllowed });
-      }
-      delete payload.role;
-      if (payload.localSamaj) {
-        const samajIds = await samajIdsForDistrict(
-          await getManagerDistrictId(manager),
+    const locationFields = [
+      "country",
+      "state",
+      "region",
+      "vibhag",
+      "district",
+      "city",
+      "localSamaj",
+    ];
+    const locationTouched = locationFields.some((field) =>
+      Object.prototype.hasOwnProperty.call(payload, field),
+    );
+    if (locationTouched) {
+      const mergedLocationInput = {
+        ...currentUser,
+        ...payload,
+      };
+      if (
+        Object.prototype.hasOwnProperty.call(payload, "localSamaj") &&
+        String(payload.localSamaj || "") !== String(currentUser.localSamaj || "")
+      ) {
+        ["country", "state", "region", "vibhag", "district", "city"].forEach(
+          (ancestorField) => {
+            if (!Object.prototype.hasOwnProperty.call(payload, ancestorField)) {
+              mergedLocationInput[ancestorField] = "";
+            }
+          },
         );
-        if (!samajIds.includes(String(payload.localSamaj))) {
-          return res.status(403).json({ message: appMessages.notAllowed });
-        }
       }
-    }
-    if (!isSelf && req.user.role === "VIBHAG_MANAGER") {
-      const manager = await findAccountByTokenId(req.user.id);
-      const inVibhag = await User.findOne({
-        _id: currentUser._id,
-        ...(await usersInManagerVibhagQuery(manager)),
+      const { user: enrichedTarget } = await enrichUserLocation(
+        mergedLocationInput,
+      );
+      locationFields.forEach((field) => {
+        if (enrichedTarget[field] !== undefined) {
+          payload[field] = enrichedTarget[field];
+        }
       });
-      if (!inVibhag) {
-        return res.status(403).json({ message: appMessages.notAllowed });
-      }
-      delete payload.role;
-      if (payload.localSamaj) {
-        const samajIds = await samajIdsForVibhag(
-          await getManagerVibhagId(manager),
-        );
-        if (!samajIds.includes(String(payload.localSamaj))) {
-          return res.status(403).json({ message: appMessages.notAllowed });
-        }
-      }
     }
-    if (!isSelf && req.user.role === "REGION_MANAGER") {
-      const manager = await findAccountByTokenId(req.user.id);
-      const inRegion = await User.findOne({
-        _id: currentUser._id,
-        ...(await usersInManagerRegionQuery(manager)),
-      });
-      if (!inRegion) {
+
+    if (!isSelf && !actorIsAdmin && visibilityMeta?.levelField) {
+      const targetLevelValue = String(
+        payload[visibilityMeta.levelField] ??
+          currentUser[visibilityMeta.levelField] ??
+          "",
+      ).trim();
+      if (
+        !visibilityMeta.locationKeys.length ||
+        !visibilityMeta.locationKeys.includes(targetLevelValue)
+      ) {
         return res.status(403).json({ message: appMessages.notAllowed });
-      }
-      delete payload.role;
-      if (payload.localSamaj) {
-        const samajIds = await samajIdsForRegion(
-          await getManagerRegionId(manager),
-        );
-        if (!samajIds.includes(String(payload.localSamaj))) {
-          return res.status(403).json({ message: appMessages.notAllowed });
-        }
-      }
-    }
-    if (!isSelf && req.user.role === "STATE_MANAGER") {
-      const manager = await findAccountByTokenId(req.user.id);
-      const inState = await User.findOne({
-        _id: currentUser._id,
-        ...(await usersInManagerStateQuery(manager)),
-      });
-      if (!inState) {
-        return res.status(403).json({ message: appMessages.notAllowed });
-      }
-      delete payload.role;
-      if (payload.localSamaj) {
-        const samajIds = await samajIdsForState(
-          await getManagerStateId(manager),
-        );
-        if (!samajIds.includes(String(payload.localSamaj))) {
-          return res.status(403).json({ message: appMessages.notAllowed });
-        }
-      }
-    }
-    if (!isSelf && req.user.role === "COUNTRY_MANAGER") {
-      const manager = await findAccountByTokenId(req.user.id);
-      const inCountry = await User.findOne({
-        _id: currentUser._id,
-        ...(await usersInManagerCountryQuery(manager)),
-      });
-      if (!inCountry) {
-        return res.status(403).json({ message: appMessages.notAllowed });
-      }
-      delete payload.role;
-      if (payload.localSamaj) {
-        const samajIds = await samajIdsForCountry(
-          await getManagerCountryId(manager),
-        );
-        if (!samajIds.includes(String(payload.localSamaj))) {
-          return res.status(403).json({ message: appMessages.notAllowed });
-        }
       }
     }
 
@@ -1162,37 +1050,23 @@ router.delete("/delete", async (req, res) => {
       return res.status(403).json({ message: appMessages.notAllowed });
     }
     const data = req.body;
-    const query = { _id: { $in: data.users } };
-    if (req.user.role === "SAMAJ_MANAGER") {
-      const manager = await findAccountByTokenId(req.user.id);
-      query.localSamaj = { $in: await samajValueKeys(manager?.localSamaj) };
+    const userIds = [
+      ...new Set(
+        (Array.isArray(data?.users) ? data.users : [])
+          .map((item) => String(item || "").trim())
+          .filter(Boolean),
+      ),
+    ];
+    if (!userIds.length) {
+      return res.status(404).json({ message: appMessages.userNotFound });
     }
-    if (req.user.role === "CITY_MANAGER") {
-      const manager = await findAccountByTokenId(req.user.id);
-      Object.assign(query, await usersInManagerCityQuery(manager));
-    }
-    if (req.user.role === "DISTRICT_MANAGER") {
-      const manager = await findAccountByTokenId(req.user.id);
-      Object.assign(query, await usersInManagerDistrictQuery(manager));
-    }
-    if (req.user.role === "VIBHAG_MANAGER") {
-      const manager = await findAccountByTokenId(req.user.id);
-      Object.assign(query, await usersInManagerVibhagQuery(manager));
-    }
-    if (req.user.role === "REGION_MANAGER") {
-      const manager = await findAccountByTokenId(req.user.id);
-      Object.assign(query, await usersInManagerRegionQuery(manager));
-    }
-    if (req.user.role === "STATE_MANAGER") {
-      const manager = await findAccountByTokenId(req.user.id);
-      Object.assign(query, await usersInManagerStateQuery(manager));
-    }
-    if (req.user.role === "COUNTRY_MANAGER") {
-      const manager = await findAccountByTokenId(req.user.id);
-      Object.assign(query, await usersInManagerCountryQuery(manager));
-    }
+    const { visibilityFilter } = await getViewerVisibilityFilter(req.user);
+    const query = mergeAnd(idsFilter(userIds), visibilityFilter);
     const usersToDelete = await User.find(query).lean();
-    await User.deleteMany(query);
+    if (usersToDelete.length !== userIds.length) {
+      return res.status(404).json({ message: appMessages.userNotFound });
+    }
+    await User.deleteMany({ _id: { $in: usersToDelete.map((doc) => doc._id) } });
     await recordActivityMany(req, "delete", "user", usersToDelete);
     res.status(200).json({ message: appMessages.deleted });
   }
@@ -1327,40 +1201,26 @@ router.patch("/approveRejectMany", async (req, res) => {
     }
     const { ids, action } = req.body;
     const isAccepting = action === "accept";
-
-    const query = { _id: { $in: ids } };
-    if (req.user.role === "SAMAJ_MANAGER") {
-      const manager = await findAccountByTokenId(req.user.id);
-      query.localSamaj = { $in: await samajValueKeys(manager?.localSamaj) };
+    const userIds = [
+      ...new Set(
+        (Array.isArray(ids) ? ids : [])
+          .map((item) => String(item || "").trim())
+          .filter(Boolean),
+      ),
+    ];
+    if (!userIds.length) {
+      return res.status(404).json({ message: appMessages.userNotFound });
     }
-    if (req.user.role === "CITY_MANAGER") {
-      const manager = await findAccountByTokenId(req.user.id);
-      Object.assign(query, await usersInManagerCityQuery(manager));
-    }
-    if (req.user.role === "DISTRICT_MANAGER") {
-      const manager = await findAccountByTokenId(req.user.id);
-      Object.assign(query, await usersInManagerDistrictQuery(manager));
-    }
-    if (req.user.role === "VIBHAG_MANAGER") {
-      const manager = await findAccountByTokenId(req.user.id);
-      Object.assign(query, await usersInManagerVibhagQuery(manager));
-    }
-    if (req.user.role === "REGION_MANAGER") {
-      const manager = await findAccountByTokenId(req.user.id);
-      Object.assign(query, await usersInManagerRegionQuery(manager));
-    }
-    if (req.user.role === "STATE_MANAGER") {
-      const manager = await findAccountByTokenId(req.user.id);
-      Object.assign(query, await usersInManagerStateQuery(manager));
-    }
-    if (req.user.role === "COUNTRY_MANAGER") {
-      const manager = await findAccountByTokenId(req.user.id);
-      Object.assign(query, await usersInManagerCountryQuery(manager));
-    }
-
+    const { visibilityFilter } = await getViewerVisibilityFilter(req.user);
+    const query = mergeAnd(idsFilter(userIds), visibilityFilter);
     const usersToUpdate = await User.find(query).lean();
+    if (usersToUpdate.length !== userIds.length) {
+      return res.status(404).json({ message: appMessages.userNotFound });
+    }
 
-    await User.updateMany(query, {
+    await User.updateMany(
+      { _id: { $in: usersToUpdate.map((doc) => doc._id) } },
+      {
         $set: {
           allowed: isAccepting,
           active: isAccepting,
