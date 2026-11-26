@@ -62,7 +62,6 @@ const userSchema = new mongoose.Schema({
   createdBy: String,
   gender: String,
   updatedBy: String,
-  fcmToken: { type: String },
 }, {
     toJSON: {
         virtuals: true,

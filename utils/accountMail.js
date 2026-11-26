@@ -1,5 +1,4 @@
 const mailSender = require("./mailSender");
-const { sendNotification } = require("./fcm");
 const { renderEmail } = require("./emailTemplate");
 const notification = require("../data/locale/notifications.json");
 
@@ -28,7 +27,6 @@ const asUser = (user) => {
     email: String(plain.email || "").trim(),
     firstName: plain.firstName,
     language: plain.language,
-    fcmToken: plain.fcmToken,
   };
 };
 
@@ -88,24 +86,10 @@ const notifyAccountEvent = async (user, kind, extra = {}) => {
   if (!account) {
     return;
   }
-  const copy = copyFor(kind, pickLang(account), account);
   try {
     await sendAccountEmail(account, kind, extra);
   } catch (error) {
     console.error("account-email-failed", kind, account.email, error.message);
-  }
-  if (account.fcmToken && copy.title) {
-    try {
-      await sendNotification(
-        account.fcmToken,
-        copy.title,
-        extra.otp
-          ? `${copy.body || copy.paragraphs[0] || ""} ${extra.otp}`.trim()
-          : copy.body || copy.paragraphs[0] || "",
-      );
-    } catch (error) {
-      console.error("account-push-failed", kind, error.message);
-    }
   }
 };
 
