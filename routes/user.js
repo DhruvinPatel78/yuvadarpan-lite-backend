@@ -8,11 +8,9 @@ const OtpGenerator = require("otp-generator");
 const OTP = require("../models/OTP");
 const Region = require("../models/region");
 const { v4: uuidv4 } = require("uuid");
-const { sendNotification } = require("../utils/fcm");
 const { notifyAccountEvent, notifyStatusChange } = require("../utils/accountMail");
 const { notifyStaffEvent } = require("../utils/notifyStaff");
 const appMessages = require("../utils/appMessages");
-const notification = require("../data/locale/notifications.json");
 const { escapeRegex } = require("../utils/escapeRegex");
 const { containsAny, mergeAnd } = require("../utils/caseInsensitiveSearch");
 const { idOrObjectIdFilter } = require("../utils/childCount");
@@ -50,6 +48,29 @@ const {
   inferUserAction,
 } = require("../utils/activityLog");
 const { enrichUserLocation } = require("../utils/userLocation");
+const {
+  asPermissionObject,
+  getPermissionByUserId,
+  setPermissionForUser,
+  clearPermissionForUser,
+} = require("../models/permission");
+
+/** Keep Permission docs only for manager roles. */
+const normalizePermissionForRole = (role, permission) => {
+  if (!isLocationMasterReadOnly(role)) {
+    return {};
+  }
+  return asPermissionObject(permission);
+};
+
+const savePermissionForUser = async (userId, role, permission) => {
+  const flags = normalizePermissionForRole(role, permission);
+  if (!isLocationMasterReadOnly(role)) {
+    await clearPermissionForUser(userId);
+    return {};
+  }
+  return setPermissionForUser(userId, flags);
+};
 
 const createUniqueOtp = async () => {
   for (let attempt = 0; attempt < 8; attempt += 1) {
@@ -163,7 +184,6 @@ router.get("/getInfo/:id", async (req, res) => {
     return res.status(404).json({ message: appMessages.userNotFound });
   }
   delete user.password;
-  delete user.fcmToken;
   const mongoId = user._id;
   user.id = mongoId;
   delete user._id;
@@ -171,6 +191,7 @@ router.get("/getInfo/:id", async (req, res) => {
   if (Object.keys(patch).length && mongoId) {
     await User.updateOne({ _id: mongoId }, { $set: patch });
   }
+  withLocation.Permission = await getPermissionByUserId(mongoId);
   res.status(200).json(withLocation);
 });
 
@@ -555,6 +576,9 @@ router.post("/add", async (req, res) => {
     if (user.role && typeof user.role === "object") {
       user.role = user.role.value || user.role.id || "USER";
     }
+    if (user.familyId != null && user.familyId !== "") {
+      user.familyId = Number(user.familyId);
+    }
     if (!user.password) {
       return res.status(400).json({ message: appMessages.passwordRequired });
     }
@@ -663,6 +687,7 @@ router.post("/add", async (req, res) => {
       }
     }
     const { user: withLocation } = await enrichUserLocation(user);
+    delete withLocation.Permission;
     const dbUser = await User.create({
       ...withLocation,
       id: uuidv4().replace(/-/g, ""),
@@ -672,9 +697,13 @@ router.post("/add", async (req, res) => {
       updatedBy: null,
       active: true,
       allowed: isAdmin,
-      fcmToken: user.fcmToken || null,
       language: user.language === "en" ? "en" : "gu",
     });
+    await savePermissionForUser(
+      dbUser._id,
+      dbUser.role || withLocation.role || user.role,
+      user.Permission,
+    );
     await notifyAccountEvent(
       dbUser,
       isAdmin ? "AccountVerifySuccess" : "RegistrationSuccess",
@@ -700,38 +729,42 @@ router.post("/add", async (req, res) => {
 });
 
 router.post("/signup", async (req, res) => {
-  const user = req.body;
-  user.password = await bcrypt.hash(user.password, 10);
-  const Email = user.email
-    ? {
-        email: { $eq: user.email },
-      }
-    : {};
-  const emailExist = await User.findOne(Email).lean();
-  const Mobile = user.mobile
-    ? {
-        mobile: { $eq: user.mobile },
-      }
-    : {};
-  const mobileExist = await User.findOne(Mobile).lean();
+  try {
+    const user = { ...req.body };
+    delete user.confirmPassword;
+    if (!user.password) {
+      return res.status(400).json({ message: appMessages.passwordRequired });
+    }
+    if (user.familyId != null && user.familyId !== "") {
+      user.familyId = Number(user.familyId);
+    }
+    user.password = await bcrypt.hash(user.password, 10);
+    const Email = user.email
+      ? {
+          email: { $eq: user.email },
+        }
+      : {};
+    const emailExist = await User.findOne(Email).lean();
+    const Mobile = user.mobile
+      ? {
+          mobile: { $eq: user.mobile },
+        }
+      : {};
+    const mobileExist = await User.findOne(Mobile).lean();
 
-  if (emailExist || mobileExist) {
-    const errorMessage =
-      emailExist && mobileExist
-        ? appMessages.emailAndMobileExist
-        : emailExist
-          ? appMessages.emailExists
-          : appMessages.mobileExists;
+    if (emailExist || mobileExist) {
+      const errorMessage =
+        emailExist && mobileExist
+          ? appMessages.emailAndMobileExist
+          : emailExist
+            ? appMessages.emailExists
+            : appMessages.mobileExists;
 
-      user?.fcmToken && await sendNotification(
-      user?.fcmToken,
-      notification.RegistrationFail.title.en,
-      errorMessage,
-    );
+      return res.status(401).json({ message: errorMessage });
+    }
 
-    res.status(401).json({ message: errorMessage });
-  } else {
     const { user: withLocation } = await enrichUserLocation(user);
+    delete withLocation.Permission;
     const dbUser = await User.create({
       ...withLocation,
       id: uuidv4().replace(/-/g, ""),
@@ -742,8 +775,7 @@ router.post("/signup", async (req, res) => {
       active: true,
       role: "USER",
       allowed: false,
-      fcmToken: user.fcmToken || null,
-        language: user.language === "en" ? "en" : "gu",
+      language: user.language === "en" ? "en" : "gu",
     });
     await notifyAccountEvent(dbUser, "RegistrationSuccess");
     notifyStaffEvent({
@@ -753,6 +785,8 @@ router.post("/signup", async (req, res) => {
       data: { path: "/request" },
     });
     res.send(dbUser);
+  } catch (e) {
+    res.status(400).json({ message: e.message || appMessages.createFailed });
   }
 });
 
@@ -895,11 +929,31 @@ router.patch("/update/:id", async (req, res) => {
     if (isSelf) {
       delete payload.role;
       delete payload.password;
+      delete payload.Permission;
       if (!actorIsAdmin) {
         delete payload.allowed;
         delete payload.active;
       }
     }
+
+    let nextPermission = null;
+    const permissionTouched =
+      Object.prototype.hasOwnProperty.call(payload, "Permission") ||
+      Boolean(payload.role);
+    // Only admins assign manager Permission flags (stored in Permission collection).
+    if (!actorIsAdmin) {
+      delete payload.Permission;
+    } else if (permissionTouched) {
+      const nextRole = payload.role || currentUser.role;
+      const existing = await getPermissionByUserId(currentUser._id);
+      nextPermission = normalizePermissionForRole(
+        nextRole,
+        Object.prototype.hasOwnProperty.call(payload, "Permission")
+          ? payload.Permission
+          : existing,
+      );
+    }
+    delete payload.Permission;
 
     if (!isSelf && req.user.role === "SAMAJ_MANAGER") {
       const manager = await findAccountByTokenId(req.user.id);
@@ -1050,6 +1104,14 @@ router.patch("/update/:id", async (req, res) => {
         },
       },
     );
+
+    if (nextPermission !== null) {
+      await savePermissionForUser(
+        currentUser._id,
+        payload.role || currentUser.role,
+        nextPermission,
+      );
+    }
 
     if (Object.keys(statusPayload).length) {
       await notifyStatusChange(
@@ -1331,45 +1393,6 @@ router.patch("/approveRejectMany", async (req, res) => {
     );
 
     res.status(200).json({ message: appMessages.updated });
-  }
-});
-
-router.patch("/fcmTokenUpdate/:id", async (req, res) => {
-  const { id } = req.params;
-  const payload = { ...req.body };
-
-  const currentUser = await User.findById(id).lean();
-
-  if (!currentUser) {
-    return res.status(404).json({ message: appMessages.userNotFound });
-  }
-
-  if (payload?.password) {
-    payload.password = await bcrypt.hash(payload.password, 10);
-  }
-
-  await User.updateOne(
-    { _id: id },
-    { ...payload, updatedAt: new Date(), updatedBy: id },
-  );
-  res.status(200).json({ message: appMessages.updated });
-});
-
-router.post("/test", async (req, res) => {
-  const user = req.body;
-  console.log("user", user);
-  if (user.fcmToken) {
-    try {
-      await sendNotification(
-        user.fcmToken,
-        "Test Notification",
-        "Test Notification send and receive successfully.",
-      );
-    } catch (err) {
-      console.log("FCM notification error:", err);
-    }
-  } else {
-    console.log("FCM token is required");
   }
 });
 

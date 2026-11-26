@@ -42,7 +42,10 @@ const dropStoredGu = async (docs = []) => {
   if (!ids.length) {
     return;
   }
-  await Yuvalist.collection.updateMany({ _id: { $in: ids } }, { $unset: { gu: "" } });
+  await Yuvalist.collection.updateMany(
+    { _id: { $in: ids } },
+    { $unset: { gu: "", address: "", "gu.address": "" } }
+  );
 };
 
 router.use((req, res, next) => {
@@ -535,7 +538,8 @@ router.post("/addYuvaList", async (req, res) => {
       if (!constrained.ok) {
         return res.status(constrained.status).json({ message: constrained.message });
       }
-      const { email, ...record } = constrained.data || {};
+      const { email, address, ...record } = constrained.data || {};
+      delete record.address;
       const prepared = prepareYuvaRecord(record);
       docs.push({
         ...prepared,
@@ -694,14 +698,16 @@ router.patch("/update/:id", async (req, res) => {
     const previous = allowed.toObject ? allowed.toObject() : { ...allowed };
     const payload = sanitizeUpdatePayload(prepareYuvaRecord(constrained.data));
     delete payload.email;
+    delete payload.address;
     delete previous.email;
+    delete previous.address;
     await Yuvalist.updateOne(filter, {
       $set: {
         ...payload,
         updatedAt: new Date(),
         updatedBy: req?.user?.id,
       },
-      $unset: { email: "", gu: "" },
+      $unset: { email: "", gu: "", address: "", "gu.address": "" },
     });
     await recordActivity({
       req,

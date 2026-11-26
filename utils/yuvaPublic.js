@@ -163,7 +163,6 @@ const MEMBER_PROFILE_KEYS = [
   "activity",
   "country",
   "firmAddress",
-  "address",
   "contactInfo",
   "handicap",
   "handicapDetails",

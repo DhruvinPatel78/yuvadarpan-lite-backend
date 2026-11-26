@@ -8,7 +8,6 @@ const TEXT_KEYS = [
   "pob",
   "firm",
   "firmAddress",
-  "address",
   "handicapDetails",
   "gender",
   "martialStatus",

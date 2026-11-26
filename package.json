@@ -9,7 +9,10 @@
     "dev:production": "nodemon server.js production",
     "start": "node server.js",
     "start:staging": "node server.js staging",
-    "start:production": "node server.js production"
+    "start:production": "node server.js production",
+    "remove-address": "node scripts/removeYuvaAddress.js",
+    "remove-address:staging": "node scripts/removeYuvaAddress.js staging",
+    "remove-address:production": "node scripts/removeYuvaAddress.js production"
   },
   "author": "",
   "license": "ISC",
@@ -24,7 +27,6 @@
     "dotenv": "^16.3.1",
     "exceljs": "^4.4.0",
     "express": "^4.19.2",
-    "firebase-admin": "^13.4.0",
     "fontkit": "^2.0.4",
     "gridfs-stream": "^1.1.1",
     "jsonwebtoken": "^9.0.2",

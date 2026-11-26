@@ -1,5 +1,4 @@
 const mailSender = require("./mailSender");
-const { sendNotification } = require("./fcm");
 const { renderEmail } = require("./emailTemplate");
 const notification = require("../data/locale/notifications.json");
 
@@ -28,7 +27,6 @@ const asUser = (user) => {
     email: String(plain.email || "").trim(),
     firstName: plain.firstName,
     language: plain.language,
-    fcmToken: plain.fcmToken,
   };
 };
 
@@ -37,19 +35,24 @@ const displayName = (user) => {
   return name || (pickLang(user) === "gu" ? "સભ્ય" : "member");
 };
 
-const copyFor = (kind, lang, user) => {
+const withName = (text, name) =>
+  String(text || "").replace(/\{\{name\}\}/g, name);
+
+const copyFor = (kind, lang, user, nameOverride) => {
   const entry = notification[kind];
   if (!entry) {
     return { title: "", heading: "", greeting: "", paragraphs: [], note: "", body: "" };
   }
-  const name = displayName(user);
+  const name = nameOverride || displayName(user);
   return {
-    title: pick(entry.title, lang),
-    heading: pick(entry.heading, lang) || pick(entry.title, lang),
-    greeting: pick(entry.greeting, lang).replace("{{name}}", name),
-    paragraphs: entry.paragraphs?.[lang] || entry.paragraphs?.en || [],
-    note: pick(entry.note, lang),
-    body: pick(entry.body, lang),
+    title: withName(pick(entry.title, lang), name),
+    heading: withName(pick(entry.heading, lang) || pick(entry.title, lang), name),
+    greeting: withName(pick(entry.greeting, lang), name),
+    paragraphs: (entry.paragraphs?.[lang] || entry.paragraphs?.en || []).map(
+      (line) => withName(line, name),
+    ),
+    note: withName(pick(entry.note, lang), name),
+    body: withName(pick(entry.body, lang), name),
   };
 };
 
@@ -58,7 +61,10 @@ const sendAccountEmail = async (user, kind, extra = {}) => {
   if (!account?.email) {
     throw new Error("invalid-mail-recipient");
   }
-  const copy = copyFor(kind, pickLang(account), account);
+  const lang = extra.language === "gu" || extra.language === "en"
+    ? extra.language
+    : pickLang(account);
+  const copy = copyFor(kind, lang, account, extra.displayName);
   if (!copy.title) {
     throw new Error(`mail-copy-missing:${kind}`);
   }
@@ -80,24 +86,10 @@ const notifyAccountEvent = async (user, kind, extra = {}) => {
   if (!account) {
     return;
   }
-  const copy = copyFor(kind, pickLang(account), account);
   try {
     await sendAccountEmail(account, kind, extra);
   } catch (error) {
     console.error("account-email-failed", kind, account.email, error.message);
-  }
-  if (account.fcmToken && copy.title) {
-    try {
-      await sendNotification(
-        account.fcmToken,
-        copy.title,
-        extra.otp
-          ? `${copy.body || copy.paragraphs[0] || ""} ${extra.otp}`.trim()
-          : copy.body || copy.paragraphs[0] || "",
-      );
-    } catch (error) {
-      console.error("account-push-failed", kind, error.message);
-    }
   }
 };
 

@@ -72,13 +72,6 @@ const yuvaListSchema = new mongoose.Schema({
   },
   firm: langPair,
   firmAddress: langPair,
-  address: {
-    ...langPairRequired,
-    validate: {
-      validator: hasEn,
-      message: "Address is required",
-    },
-  },
   country: {
     type: String,
     required: true,
@@ -157,7 +150,6 @@ const TEXT_KEYS = [
   "pob",
   "firm",
   "firmAddress",
-  "address",
   "handicapDetails",
   "gender",
   "martialStatus",

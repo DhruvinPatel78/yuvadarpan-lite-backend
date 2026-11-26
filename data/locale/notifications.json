@@ -220,6 +220,26 @@
       "en": "New signup request",
       "gu": "નવી સાઇનઅપ વિનંતી"
     },
+    "heading": {
+      "en": "New signup request",
+      "gu": "નવી સાઇનઅપ વિનંતી"
+    },
+    "greeting": {
+      "en": "Hello,",
+      "gu": "નમસ્તે,"
+    },
+    "paragraphs": {
+      "en": [
+        "{{name}} requested account approval on Yuvadarpan. Please review the request."
+      ],
+      "gu": [
+        "{{name}} એ યુવાદર્પણ પર એકાઉન્ટ મંજૂરીની વિનંતી કરી છે. કૃપા કરીને વિનંતીની સમીક્ષા કરો."
+      ]
+    },
+    "note": {
+      "en": "Open the Requests page to approve or reject.",
+      "gu": "મંજૂર અથવા નકારવા માટે વિનંતી પેજ ખોલો."
+    },
     "body": {
       "en": "{{name}} requested account approval.",
       "gu": "{{name}} એ એકાઉન્ટ મંજૂરીની વિનંતી કરી છે."
