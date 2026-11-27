@@ -6,6 +6,7 @@ const {
   getRoleRank,
   getVisibleRolesForRole,
   buildUserVisibilityFilter,
+  canManageTargetUser,
 } = require("../utils/userVisibility");
 
 /**
@@ -327,4 +328,54 @@ test("getVisibleRolesForRole returns only roles with rank >= viewer rank", () =>
     "SAMAJ_MANAGER",
     "USER",
   ]);
+});
+
+test("ADMIN can edit/delete other ADMINs and all lower roles", () => {
+  const admin = DATASET.find((u) => u.id === "admin-1");
+  const otherAdmin = DATASET.find((u) => u.id === "admin-no-loc");
+  const samajManager = DATASET.find((u) => u.id === "sjm-sm1");
+  const regularUser = DATASET.find((u) => u.id === "user-sm1");
+
+  assert.equal(canManageTargetUser(admin, otherAdmin), true);
+  assert.equal(canManageTargetUser(admin, samajManager), true);
+  assert.equal(canManageTargetUser(admin, regularUser), true);
+});
+
+test("managers cannot edit/delete other siblings or delete themselves, but can manage lower roles", () => {
+  for (const tc of MANAGER_CASES) {
+    const viewer = DATASET.find((u) => u.id === tc.viewerId);
+    const sibling = DATASET.find((u) => u.id === tc.sameLocSibling);
+    const descendant = DATASET.find((u) => u.id === tc.expectedDescendants[0]);
+
+    // Cannot edit or delete same-role sibling
+    assert.equal(
+      canManageTargetUser(viewer, sibling),
+      false,
+      `${tc.role} must NOT edit/delete sibling ${sibling.id}`,
+    );
+    assert.equal(
+      canManageTargetUser(viewer, sibling, { allowSelf: true }),
+      false,
+      `${tc.role} must NOT edit sibling even with allowSelf`,
+    );
+
+    // Cannot delete self, but can edit self via allowSelf (e.g. /profile)
+    assert.equal(
+      canManageTargetUser(viewer, viewer),
+      false,
+      `${tc.role} must NOT delete self`,
+    );
+    assert.equal(
+      canManageTargetUser(viewer, viewer, { allowSelf: true }),
+      true,
+      `${tc.role} may update own profile via allowSelf`,
+    );
+
+    // Can edit/delete strictly lower-ranked descendant
+    assert.equal(
+      canManageTargetUser(viewer, descendant),
+      true,
+      `${tc.role} can manage descendant ${descendant.id}`,
+    );
+  }
 });

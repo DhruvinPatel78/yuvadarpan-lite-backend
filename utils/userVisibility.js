@@ -92,6 +92,38 @@ const buildSelfFilter = (currentUser) => {
   return clauses.length === 1 ? clauses[0] : { $or: clauses };
 };
 
+const isSameUserRecord = (viewer, targetUser) => {
+  const viewerIds = [viewer?._id, viewer?.id]
+    .filter((val) => val != null && String(val).trim() !== "")
+    .map((val) => String(val).trim());
+  const targetIds = [targetUser?._id, targetUser?.id]
+    .filter((val) => val != null && String(val).trim() !== "")
+    .map((val) => String(val).trim());
+  return viewerIds.some((id) => targetIds.includes(id));
+};
+
+/**
+ * Whether `viewer` can edit/delete `targetUser` (once `targetUser` is in visibility scope).
+ * ADMIN can manage anyone (including other ADMINs). Managers can only manage strictly
+ * lower-ranked users (never same-role siblings or higher roles), unless `allowSelf` is true
+ * for self-profile updates.
+ */
+const canManageTargetUser = (viewer, targetUser, { allowSelf = false } = {}) => {
+  if (!viewer || !targetUser) return false;
+  const viewerRank = getRoleRank(viewer.role);
+  if (viewerRank === ROLE_RANK.ADMIN) {
+    return true;
+  }
+  if (allowSelf && isSameUserRecord(viewer, targetUser)) {
+    return true;
+  }
+  const targetRank =
+    typeof targetUser.roleRank === "number"
+      ? targetUser.roleRank
+      : getRoleRank(targetUser.role);
+  return targetRank > viewerRank;
+};
+
 const resolveViewerLocationKeys = (currentUser, levelField, options = {}) => {
   if (Array.isArray(options?.locationKeys)) {
     return [
@@ -172,5 +204,7 @@ module.exports = {
   getRoleRank,
   getVisibleRolesForRole,
   buildSelfFilter,
+  isSameUserRecord,
+  canManageTargetUser,
   buildUserVisibilityFilter,
 };

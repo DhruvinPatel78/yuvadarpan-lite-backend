@@ -63,6 +63,7 @@ const {
 } = require("../utils/userLocation");
 const {
   buildUserVisibilityFilter,
+  canManageTargetUser,
   USER_LEVEL_FIELD_BY_ROLE,
   getRoleRank,
   normalizeRole,
@@ -869,6 +870,13 @@ router.patch("/update/:id", async (req, res) => {
     if (isAdminRole(currentUser.role) && !actorIsAdmin) {
       return res.status(404).json({ message: appMessages.userNotFound });
     }
+    if (
+      !isSelf &&
+      actorCanManage &&
+      !canManageTargetUser(visibilityMeta?.viewer, currentUser)
+    ) {
+      return res.status(403).json({ message: appMessages.notAllowed });
+    }
 
     if (isSelf) {
       delete payload.role;
@@ -1060,11 +1068,14 @@ router.delete("/delete", async (req, res) => {
     if (!userIds.length) {
       return res.status(404).json({ message: appMessages.userNotFound });
     }
-    const { visibilityFilter } = await getViewerVisibilityFilter(req.user);
+    const { viewer, visibilityFilter } = await getViewerVisibilityFilter(req.user);
     const query = mergeAnd(idsFilter(userIds), visibilityFilter);
     const usersToDelete = await User.find(query).lean();
     if (usersToDelete.length !== userIds.length) {
       return res.status(404).json({ message: appMessages.userNotFound });
+    }
+    if (usersToDelete.some((doc) => !canManageTargetUser(viewer, doc))) {
+      return res.status(403).json({ message: appMessages.notAllowed });
     }
     await User.deleteMany({ _id: { $in: usersToDelete.map((doc) => doc._id) } });
     await recordActivityMany(req, "delete", "user", usersToDelete);
@@ -1211,11 +1222,14 @@ router.patch("/approveRejectMany", async (req, res) => {
     if (!userIds.length) {
       return res.status(404).json({ message: appMessages.userNotFound });
     }
-    const { visibilityFilter } = await getViewerVisibilityFilter(req.user);
+    const { viewer, visibilityFilter } = await getViewerVisibilityFilter(req.user);
     const query = mergeAnd(idsFilter(userIds), visibilityFilter);
     const usersToUpdate = await User.find(query).lean();
     if (usersToUpdate.length !== userIds.length) {
       return res.status(404).json({ message: appMessages.userNotFound });
+    }
+    if (usersToUpdate.some((doc) => !canManageTargetUser(viewer, doc))) {
+      return res.status(403).json({ message: appMessages.notAllowed });
     }
 
     await User.updateMany(
