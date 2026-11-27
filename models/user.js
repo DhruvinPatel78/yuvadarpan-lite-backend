@@ -1,4 +1,5 @@
 const mongoose = require("mongoose");
+const { getRoleRank, normalizeRole } = require("../utils/userVisibility");
 
 const userSchema = new mongoose.Schema({
   id: {
@@ -57,6 +58,10 @@ const userSchema = new mongoose.Schema({
   active: Boolean,
   allowed: Boolean,
   role: String,
+  roleRank: {
+    type: Number,
+    index: true,
+  },
   createdAt: Date,
   updatedAt: Date,
   createdBy: String,
@@ -81,6 +86,14 @@ const userSchema = new mongoose.Schema({
             return ret;
         }
     }
+});
+
+userSchema.pre("save", function syncRoleRank(next) {
+  if (this.role) {
+    this.role = normalizeRole(this.role);
+  }
+  this.roleRank = getRoleRank(this.role);
+  next();
 });
 
 const User = mongoose.model("User", userSchema);
